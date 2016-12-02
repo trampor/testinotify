@@ -37,8 +37,6 @@ int main(int argc, char* argv[]) {
 
 	}
 
-	cout << "total " << filechangemonitor.GetDestNum() << " dests to monitor!" << endl;
-
 	while(!g_bexit)
 	{
 		sleep(1);
