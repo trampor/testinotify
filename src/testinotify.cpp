@@ -20,6 +20,8 @@ int main(int argc, char* argv[]) {
 		cout << "usage testinotify path" << endl;
 	}
 
+	cout << endl;
+
 	cout << "asdfasdf" << endl;
 
 	SignalHandler handler;
