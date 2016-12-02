@@ -13,7 +13,6 @@
 class SignalHandler {
 public:
 	SignalHandler();
-	virtual ~SignalHandler();
 
 	static void handle_signal(int n,struct siginfo* psiginfo,void *myact);
 };

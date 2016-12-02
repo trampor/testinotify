@@ -1,68 +1,13 @@
+/*
+ * FileMonitor.cpp
+ *
+ *  Created on: Dec 2, 2016
+ *      Author: xjxing
+ */
 
-#include <iostream>
-#include <unistd.h>
-#include <stdio.h>
-#include <string.h>
-#include <sys/inotify.h>
-#include <sys/stat.h>
-#include <dirent.h>
-#include <pthread.h>
-#include <map>
-#include <string>
-using namespace std;
+#include "FileMonitor.h"
 
-#define EVENT_SIZE (sizeof(struct inotify_event))
-#define BUF_LEN (1024*(EVENT_SIZE+16))
-
-struct FileNode
-{
-	int wd;
-	int type; //0 dir;1 file;
-	FileNode *parent_node;
-	FileNode *child_node;
-	FileNode *next_node;
-	int name_length;
-	char name[0]; //
-	FileNode()
-	{
-		parent_node = NULL;
-		child_node = NULL;
-		next_node = NULL;
-	}
-};
-
-class FileChangeMonitor
-{
-public:
-	FileChangeMonitor(char* ppath,int mask,int subdir);
-	~FileChangeMonitor();
-
-	int GetErrNo();
-	int GetDestNum();
-	int StartMonitor();
-	int StopMonitor();
-
-private:
-	FileNode* AllocFileNode(char* pname);
-	int Recursive_Add_Watch(char* path,FileNode* pparent);
-	int Delete_SubDir(FileNode* pparent,char* dirname);
-	int Recursive_Delete_SubDir(FileNode* pdir);
-	static void* WorkThread(void* pthis);
-	void* ImpWorkThread();
-	int ClearData();
-
-private:
-	int m_fd,m_mask,m_subdir,m_filetype,m_destnum,m_errno;
-	bool m_bstarted;
-	char m_path[256];
-
-	pthread_t m_threadid;
-	FileNode *m_prootnode;
-	map<int,FileNode*> m_wd2node;
-	typedef map<int,FileNode*>::const_iterator NodeIter;
-};
-
-FileChangeMonitor::FileChangeMonitor(char* ppath,int mask,int subdir)
+FileMonitor::FileMonitor(char* ppath,int mask,int subdir)
 {
 	m_errno = 0;
 	m_fd = -1;
@@ -102,24 +47,24 @@ FileChangeMonitor::FileChangeMonitor(char* ppath,int mask,int subdir)
 	strcpy(m_path,ppath);
 	m_mask = mask;
 	m_subdir = subdir;
-};
-
-FileChangeMonitor::~FileChangeMonitor()
-{
 }
 
-FileNode* FileChangeMonitor::AllocFileNode(char* pname)
+FileMonitor::~FileMonitor() {
+	// TODO Auto-generated destructor stub
+}
+
+FileNode* FileMonitor::AllocFileNode(char* pname)
 {
 	char *ptempptr = new char[sizeof(FileNode) + strlen(pname)+1];
 	return new(ptempptr) FileNode();
 }
 
-int FileChangeMonitor::GetErrNo()
+int FileMonitor::GetErrNo()
 {
 	return m_errno;
 }
 
-int FileChangeMonitor::StartMonitor()
+int FileMonitor::StartMonitor()
 {
 	m_errno = 0;
 	if(m_bstarted)
@@ -163,12 +108,12 @@ int FileChangeMonitor::StartMonitor()
 	if(errno < 0)
 		return m_errno;
 
-	pthread_create(&m_threadid,NULL,FileChangeMonitor::WorkThread,this);
+	pthread_create(&m_threadid,NULL,FileMonitor::WorkThread,this);
 
 	return 0;
 }
 
-int FileChangeMonitor::StopMonitor()
+int FileMonitor::StopMonitor()
 {
 	if(m_bstarted )
 	{
@@ -189,7 +134,7 @@ int FileChangeMonitor::StopMonitor()
 	return 0;
 }
 
-int FileChangeMonitor::ClearData()
+int FileMonitor::ClearData()
 {
 	for(auto nodeiter : m_wd2node)
 	{
@@ -205,12 +150,12 @@ int FileChangeMonitor::ClearData()
 	return 0;
 }
 
-int FileChangeMonitor::GetDestNum()
+int FileMonitor::GetDestNum()
 {
 	return m_destnum;
 }
 
-int FileChangeMonitor::Recursive_Add_Watch(char* path,FileNode* pparent)
+int FileMonitor::Recursive_Add_Watch(char* path,FileNode* pparent)
 {
 	FileNode* node;
 
@@ -287,13 +232,13 @@ int FileChangeMonitor::Recursive_Add_Watch(char* path,FileNode* pparent)
 	return 0;
 }
 
-void* FileChangeMonitor::WorkThread(void *pthis)
+void* FileMonitor::WorkThread(void *pthis)
 {
-	FileChangeMonitor* pmonitor = (FileChangeMonitor*)pthis;
+	FileMonitor* pmonitor = (FileMonitor*)pthis;
 	return pmonitor->ImpWorkThread();
 }
 
-void* FileChangeMonitor::ImpWorkThread()
+void* FileMonitor::ImpWorkThread()
 {
 	m_bstarted = true;
 	cout << "monitor thread "<< pthread_self() << " create suc, dest = " << m_path <<endl;
@@ -493,7 +438,7 @@ void* FileChangeMonitor::ImpWorkThread()
 	pthread_exit((void*)0);
 }
 
-int FileChangeMonitor::Delete_SubDir(FileNode* pparent,char* dirname)
+int FileMonitor::Delete_SubDir(FileNode* pparent,char* dirname)
 {
 	FileNode *psubnode = pparent->child_node,*plastsubnode = NULL;
 	while(psubnode != NULL)
@@ -515,7 +460,7 @@ int FileChangeMonitor::Delete_SubDir(FileNode* pparent,char* dirname)
 	return 0;
 }
 
-int FileChangeMonitor::Recursive_Delete_SubDir(FileNode* pdir)
+int FileMonitor::Recursive_Delete_SubDir(FileNode* pdir)
 {
 	FileNode* pchild_node = pdir->child_node,*ptempnode;
 	while(pchild_node != NULL)
@@ -535,3 +480,4 @@ int FileChangeMonitor::Recursive_Delete_SubDir(FileNode* pdir)
 
 	return 0;
 }
+

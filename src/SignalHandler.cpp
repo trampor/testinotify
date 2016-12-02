@@ -7,9 +7,11 @@
 
 #include "SignalHandler.h"
 #include <iostream>
+#include <pthread.h>
 using namespace std;
 
-bool g_bexit = false;
+pthread_cond_t g_exit_cond = PTHREAD_COND_INITIALIZER;
+pthread_mutex_t g_exit_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 SignalHandler::SignalHandler() {
 	struct sigaction act;
@@ -25,10 +27,6 @@ SignalHandler::SignalHandler() {
 	}
 }
 
-SignalHandler::~SignalHandler() {
-	// TODO Auto-generated destructor stub
-}
-
 void SignalHandler::handle_signal(int n,struct siginfo* psiginfo,void *myact)
 {
 	if(n == SIGHUP)
@@ -39,5 +37,8 @@ void SignalHandler::handle_signal(int n,struct siginfo* psiginfo,void *myact)
 		cout << "recv a SIGQUIT" << endl;
 	if(n == SIGTERM)
 		cout << "recv a SIGTERM" << endl;
-	g_bexit = true;
+
+	pthread_mutex_lock(&g_exit_mutex);
+	pthread_cond_signal(&g_exit_cond);
+	pthread_mutex_unlock(&g_exit_mutex);
 }

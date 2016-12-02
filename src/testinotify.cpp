@@ -7,12 +7,13 @@
 //============================================================================
 
 #include <iostream>
-#include "FileChangeMonitor.hpp"
+
+#include "FileMonitor.h"
 #include "SignalHandler.h"
 using namespace std;
 
-extern bool g_bexit;
-
+extern pthread_cond_t g_exit_cond;
+extern pthread_mutex_t g_exit_mutex;
 int main(int argc, char* argv[]) {
 
 	if(argc <2)
@@ -23,26 +24,26 @@ int main(int argc, char* argv[]) {
 	SignalHandler handler;
 
 	int errno;
-	FileChangeMonitor filechangemonitor(argv[1],IN_ALL_EVENTS|IN_MODIFY|IN_CREATE|IN_DELETE|IN_DELETE_SELF|IN_ATTRIB,1);
-	if((errno=filechangemonitor.GetErrNo()) < 0)
+	FileMonitor filemonitor(argv[1],IN_ALL_EVENTS|IN_MODIFY|IN_CREATE|IN_DELETE|IN_DELETE_SELF|IN_ATTRIB,1);
+	if((errno=filemonitor.GetErrNo()) < 0)
 	{
 		cout<<"init monitor fail,errno="<<errno<<endl;
 		exit(-1);
 	}
 
-	if((errno=filechangemonitor.StartMonitor()) < 0)
+	if((errno=filemonitor.StartMonitor()) < 0)
 	{
 		cout<<"start monitor fail,errno="<<errno<<endl;
 		exit(-2);
 
 	}
 
-	while(!g_bexit)
-	{
-		sleep(1);
-	}
+	pthread_mutex_lock(&g_exit_mutex);
+	pthread_cond_wait(&g_exit_cond,&g_exit_mutex);
+	pthread_mutex_unlock(&g_exit_mutex);
+	pthread_cond_destroy(&g_exit_cond);
 
-	filechangemonitor.StopMonitor();
+	filemonitor.StopMonitor();
 
 	exit(0);
 }
