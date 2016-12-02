@@ -19,7 +19,7 @@ int main(int argc, char* argv[]) {
 	{
 		cout << "usage testinotify path" << endl;
 	}
-
+adsfasdfadsfadsfasdf
 	cout << "asdfasdf" << endl;
 
 	SignalHandler handler;
