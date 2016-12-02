@@ -7,9 +7,7 @@
 
 #include "SignalHandler.h"
 #include <iostream>
-#include <boost/bind.hpp>
 using namespace std;
-using namespace boost;
 
 bool g_bexit = false;
 

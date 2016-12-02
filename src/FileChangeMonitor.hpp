@@ -6,11 +6,10 @@
 #include <sys/inotify.h>
 #include <sys/stat.h>
 #include <dirent.h>
-#include <boost/thread/thread.hpp>
+#include <pthread.h>
 #include <map>
 #include <string>
 using namespace std;
-using namespace boost;
 
 #define EVENT_SIZE (sizeof(struct inotify_event))
 #define BUF_LEN (1024*(EVENT_SIZE+16))
@@ -48,14 +47,16 @@ private:
 	int Recursive_Add_Watch(char* path,FileNode* pparent);
 	int Delete_SubDir(FileNode* pparent,char* dirname);
 	int Recursive_Delete_SubDir(FileNode* pdir);
-	int WorkThread();
+	static void* WorkThread(void* pthis);
+	void* ImpWorkThread();
 	int ClearData();
 
 private:
 	int m_fd,m_mask,m_subdir,m_filetype,m_destnum,m_errno;
 	bool m_bstarted;
 	char m_path[256];
-	boost::thread *pmonitorthread;
+
+	pthread_t m_threadid;
 	FileNode *m_prootnode;
 	map<int,FileNode*> m_wd2node;
 	typedef map<int,FileNode*>::const_iterator NodeIter;
@@ -162,19 +163,17 @@ int FileChangeMonitor::StartMonitor()
 	if(errno < 0)
 		return m_errno;
 
-	pmonitorthread = new boost::thread(std::bind(&FileChangeMonitor::WorkThread,this));
+	pthread_create(&m_threadid,NULL,FileChangeMonitor::WorkThread,this);
 
 	return 0;
 }
 
 int FileChangeMonitor::StopMonitor()
 {
-	if(m_bstarted && pmonitorthread)
+	if(m_bstarted )
 	{
 		m_bstarted = false;
-		pmonitorthread->join();
-		delete pmonitorthread;
-		pmonitorthread = NULL;
+		pthread_join(m_threadid,NULL);
 	}
 
 	ClearData();
@@ -288,10 +287,16 @@ int FileChangeMonitor::Recursive_Add_Watch(char* path,FileNode* pparent)
 	return 0;
 }
 
-int FileChangeMonitor::WorkThread()
+void* FileChangeMonitor::WorkThread(void *pthis)
+{
+	FileChangeMonitor* pmonitor = (FileChangeMonitor*)pthis;
+	return pmonitor->ImpWorkThread();
+}
+
+void* FileChangeMonitor::ImpWorkThread()
 {
 	m_bstarted = true;
-	cout << "monitor thread "<< this_thread::get_id() << " create suc, dest = " << m_path <<endl;
+	cout << "monitor thread "<< pthread_self() << " create suc, dest = " << m_path <<endl;
 	fd_set rfd;
 	struct timeval tv;
 	tv.tv_sec = 1;
@@ -483,9 +488,9 @@ int FileChangeMonitor::WorkThread()
 			i += EVENT_SIZE + pevent->len;
 		}
 	}
-	cout << "monitor thread " <<this_thread::get_id() << " exit suc" << endl;
+	cout << "monitor thread " <<pthread_self() << " exit suc" << endl;
 
-	return 0;
+	return NULL;
 }
 
 int FileChangeMonitor::Delete_SubDir(FileNode* pparent,char* dirname)
