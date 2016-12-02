@@ -490,7 +490,7 @@ void* FileChangeMonitor::ImpWorkThread()
 	}
 	cout << "monitor thread " <<pthread_self() << " exit suc" << endl;
 
-	return NULL;
+	pthread_exit((void*)0);
 }
 
 int FileChangeMonitor::Delete_SubDir(FileNode* pparent,char* dirname)
