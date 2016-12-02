@@ -170,12 +170,12 @@ int FileMonitor::Recursive_Add_Watch(char* path,FileNode* pparent)
 	int wd = inotify_add_watch(m_fd,subdirstr.c_str(),m_mask);
 	if(wd < 0)
 	{
-		cout << "add_watch dest fail : " << path << endl;
+		cout << "add_watch dest fail : " << subdirstr.c_str() << endl;
 		return -1;
 	}
 	else
 	{
-		cout << "add_watch dest suc : " << wd <<" " << path << endl;
+		cout << "add_watch dest suc : " << wd <<" " << subdirstr.c_str() << endl;
 
 		node = AllocFileNode(path);
 		node->wd = wd;
