@@ -8,13 +8,8 @@
 #include "FileMonitor.h"
 
 FileMonitor::FileMonitor(char* ppath,int mask,int subdir)
+:m_fd(-1),m_destnum(0),m_errno(0),m_bstarted(false),m_threadid(0),m_prootnode(NULL)
 {
-	m_errno = 0;
-	m_fd = -1;
-	m_destnum = 0;
-	m_bstarted = false;
-	m_prootnode = NULL;
-
 	if(ppath == NULL || strlen(ppath) == 0)
 	{
 		m_errno = -1;

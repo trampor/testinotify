@@ -7,7 +7,6 @@
 //============================================================================
 
 #include <iostream>
-
 #include "FileMonitor.h"
 #include "SignalHandler.h"
 using namespace std;
@@ -42,6 +41,7 @@ int main(int argc, char* argv[]) {
 	pthread_cond_wait(&g_exit_cond,&g_exit_mutex);
 	pthread_mutex_unlock(&g_exit_mutex);
 	pthread_cond_destroy(&g_exit_cond);
+	pthread_mutex_destroy(&g_exit_mutex);
 
 	filemonitor.StopMonitor();
 
