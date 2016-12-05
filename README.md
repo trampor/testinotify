@@ -1,0 +1,3 @@
+# testinotify
+
+hello
