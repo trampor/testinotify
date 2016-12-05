@@ -378,6 +378,7 @@ void* FileMonitor::ImpWorkThread()
 					{
 						cout << "recv a dir IN_ATTRIB notify : "<< pevent->wd  <<" "<< pevent->name << endl;
 						cout << "recv a dir IN_ATTRIB notify : "<< pevent->wd  <<" "<< pevent->name << endl;
+						cout << "recv a dir IN_ATTRIB notify : "<< pevent->wd  <<" "<< pevent->name << endl;
 
 					}
 					else
