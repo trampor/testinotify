@@ -27,13 +27,16 @@ struct FileNode
 {
 	int wd;
 	int type; //0 dir;1 file;
+	off_t size;
+	int modifying;
+	struct timespec st_mtim;
 	FileNode *parent_node;
 	FileNode *child_node;
 	FileNode *next_node;
-	int name_length;
 	char name[0]; //
 	FileNode()
 	{
+		type = 1;
 		parent_node = NULL;
 		child_node = NULL;
 		next_node = NULL;
@@ -61,10 +64,11 @@ private:
 private:
 	int m_fd,m_mask,m_subdir,m_filetype,m_destnum,m_errno;
 	bool m_bstarted;
-	char m_path[256];
+	char m_path[256],m_temppathbuf[256];
 
 	pthread_t m_threadid;
 	FileNode *m_prootnode;
+	struct stat m_filestat;
 	map<int,FileNode*> m_wd2node;
 	typedef map<int,FileNode*>::const_iterator NodeIter;
 };

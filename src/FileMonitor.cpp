@@ -50,7 +50,19 @@ FileMonitor::~FileMonitor() {
 
 FileNode* FileMonitor::AllocFileNode(char* pname)
 {
-	char *ptempptr = new char[sizeof(FileNode) + strlen(pname)+1];
+	char *ptempptr;
+	if(pname == NULL || strlen(pname) == 0)
+	{
+		int length = sizeof(FileNode) + 1;
+		ptempptr = new char[length];
+		memset(ptempptr,0,length);
+	}
+	else
+	{
+		int length = sizeof(FileNode) + strlen(pname)+1;
+		ptempptr = new char[length];
+		memset(ptempptr,0,length);
+	}
 	return new(ptempptr) FileNode();
 }
 
@@ -92,15 +104,19 @@ int FileMonitor::StartMonitor()
 			FileNode* node = AllocFileNode(m_path) ;
 			node->wd = wd;
 			node->type = 1;
-			node->name_length = strlen(m_path);
 			strcpy(&node->name[0],m_path);
 			m_wd2node.insert({wd,node});
+
+			stat(m_path,&m_filestat);
+			node->size = m_filestat.st_size;
+			node->st_mtim = m_filestat.st_mtim;
+			node->modifying = 0;
 		}
 	}
 	else //unknown file type
 		m_errno = -3;
 
-	if(errno < 0)
+	if(m_errno < 0)
 		return m_errno;
 
 	pthread_create(&m_threadid,NULL,FileMonitor::WorkThread,this);
@@ -131,16 +147,22 @@ int FileMonitor::StopMonitor()
 
 int FileMonitor::ClearData()
 {
-	for(auto nodeiter : m_wd2node)
+	if(m_prootnode != NULL)
 	{
-		inotify_rm_watch(m_fd,nodeiter.second->wd);
+		if(m_prootnode->type == 1)
+		{
+			inotify_rm_watch(m_fd,m_prootnode->wd);
 
-		delete (char*)nodeiter.second;
+			delete (char*)m_prootnode;
+		}
+		else
+		{
+			Recursive_Delete_SubDir(m_prootnode);
+		}
+		m_prootnode = NULL;
 	}
 
 	m_wd2node.clear();
-
-	m_prootnode = NULL;
 
 	return 0;
 }
@@ -152,7 +174,7 @@ int FileMonitor::GetDestNum()
 
 int FileMonitor::Recursive_Add_Watch(char* path,FileNode* pparent)
 {
-	FileNode* node;
+	FileNode* node,*pfilenode;
 
 	string subdirstr;
 	FileNode* ptempnode = pparent;
@@ -180,7 +202,6 @@ int FileMonitor::Recursive_Add_Watch(char* path,FileNode* pparent)
 		node = AllocFileNode(path);
 		node->wd = wd;
 		node->type = 0;
-		node->name_length = strlen(path);
 		strcpy(&node->name[0],path);
 		m_wd2node.insert({wd,node});
 
@@ -193,10 +214,8 @@ int FileMonitor::Recursive_Add_Watch(char* path,FileNode* pparent)
 				pparent->child_node = node;
 			else
 			{
-				FileNode *ptempnode = pparent->child_node;
-				while(ptempnode->next_node != NULL)
-					ptempnode = ptempnode->next_node;
-				ptempnode->next_node = node;
+				node->next_node = pparent->child_node;
+				pparent->child_node = node;
 			}
 		}
 	}
@@ -219,6 +238,25 @@ int FileMonitor::Recursive_Add_Watch(char* path,FileNode* pparent)
 		}
 		else if(dent->d_type == DT_REG)
 		{
+			pfilenode = AllocFileNode(dent->d_name);
+			pfilenode->wd = wd;
+			pfilenode->type = 1;
+			strcpy(&pfilenode->name[0],dent->d_name);
+
+			pfilenode->parent_node = node;
+			if(node->child_node == NULL)
+				node->child_node = pfilenode;
+			else
+			{
+				pfilenode->next_node = node->child_node;
+				node->child_node = pfilenode;
+			}
+
+			sprintf(m_temppathbuf,"%s/%s",subdirstr.c_str(),dent->d_name);
+			stat(m_path,&m_filestat);
+			node->size = m_filestat.st_size;
+			node->st_mtim = m_filestat.st_mtim;
+			node->modifying = 0;
 		}
 	}
 
@@ -316,13 +354,6 @@ void* FileMonitor::ImpWorkThread()
 					if(pevent->mask & IN_ISDIR)
 					{
 						cout << "recv a dir IN_DELETE_SELF notify : "<< pevent->wd  <<" "<< pevent->name << endl;
-
-						NodeIter nodeiter = m_wd2node.find(pevent->wd);
-						if(nodeiter != m_wd2node.end())
-						{
-							delete nodeiter->second;
-							m_wd2node.erase(nodeiter);
-						}
 					}
 					else
 					{
@@ -461,17 +492,23 @@ int FileMonitor::Recursive_Delete_SubDir(FileNode* pdir)
 	while(pchild_node != NULL)
 	{
 		ptempnode = pchild_node->next_node;
-		Recursive_Delete_SubDir(pchild_node);
+		if(pchild_node->type == 0) //dir sub
+			Recursive_Delete_SubDir(pchild_node);
+		else //file sub
+		{
+			cout << "delete file node "<< pdir->wd << " " <<  pchild_node->name << endl;
+			delete pchild_node;
+		}
 		pchild_node = ptempnode;
 	}
 
-	cout << "delete node "<< pdir->wd << " " <<  pdir->name << endl;
+	cout << "delete dir node "<< pdir->wd << " " <<  pdir->name << endl;
 
 	m_wd2node.erase(pdir->wd);
 
 	inotify_rm_watch(m_fd,pdir->wd);
 
-	delete (char*)pdir;
+	delete pdir;
 
 	return 0;
 }
