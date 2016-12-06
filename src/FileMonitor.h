@@ -63,6 +63,8 @@ private:
 	void* ImpWorkThread();
 	int ClearData();
 
+	int PrintDirTree();
+
 private:
 	int m_fd,m_mask,m_subdir,m_filetype,m_destnum,m_errno;
 	bool m_bstarted;

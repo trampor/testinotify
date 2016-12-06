@@ -119,6 +119,7 @@ int FileMonitor::StartMonitor()
 	if(m_errno < 0)
 		return m_errno;
 
+	PrintDirTree();
 	pthread_create(&m_threadid,NULL,FileMonitor::WorkThread,this);
 
 	return 0;
@@ -314,6 +315,7 @@ void* FileMonitor::ImpWorkThread()
 						if(nodeiter != m_wd2node.end())
 						{
 							Recursive_Add_Watch(pevent->name,nodeiter->second);
+							PrintDirTree();
 						}
 					}
 					else
@@ -342,6 +344,7 @@ void* FileMonitor::ImpWorkThread()
 						if(nodeiter != m_wd2node.end())
 						{
 							Delete_SubDir(nodeiter->second,pevent->name);
+							PrintDirTree();
 						}
 					}
 					else
@@ -417,6 +420,7 @@ void* FileMonitor::ImpWorkThread()
 						if(nodeiter != m_wd2node.end())
 						{
 							Delete_SubDir(nodeiter->second,pevent->name);
+							PrintDirTree();
 						}
 					}
 					else
@@ -435,6 +439,7 @@ void* FileMonitor::ImpWorkThread()
 						{
 							sprintf(subdirstr,"%s/%s",nodeiter->second->name,pevent->name);
 							Recursive_Add_Watch(subdirstr,nodeiter->second);
+							PrintDirTree();
 						}
 					}
 					else
@@ -512,3 +517,7 @@ int FileMonitor::Recursive_Delete_SubDir(FileNode* pdir)
 	return 0;
 }
 
+int FileMonitor::PrintDirTree()
+{
+	return 0;
+}
