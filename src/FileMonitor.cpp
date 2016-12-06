@@ -758,6 +758,7 @@ int FileMonitor::Recursive_Delete_Node(FileNode* pnode)
 	if(m_prootnode == pnode)
 	{
 		m_prootnode = NULL;
+		m_wd2node.clear();
 		m_destnum = 0;
 	}
 
