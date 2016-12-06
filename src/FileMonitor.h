@@ -55,15 +55,16 @@ public:
 	int StopMonitor();
 
 private:
+	int SetupMonitor();
 	FileNode* AllocFileNode(char* pname);
 	int Recursive_Add_Watch(char* path,FileNode* pparent);
 	int Delete_SubDir(FileNode* pparent,char* dirname);
-	int Recursive_Delete_SubDir(FileNode* pdir);
+	int Recursive_Delete_Node(FileNode* pdir);
 	static void* WorkThread(void* pthis);
 	void* ImpWorkThread();
 	int ClearData();
 
-	int PrintDirTree();
+	int PrintDirTree(FileNode* pnode,int level);
 
 private:
 	int m_fd,m_mask,m_subdir,m_filetype,m_destnum,m_errno;
