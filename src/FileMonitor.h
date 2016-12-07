@@ -11,15 +11,9 @@
 #define FILEMONITOR_H_
 
 #include <iostream>
-#include <unistd.h>
-#include <stdio.h>
-#include <string.h>
 #include <sys/inotify.h>
 #include <sys/stat.h>
-#include <dirent.h>
-#include <pthread.h>
 #include <map>
-#include <string>
 using namespace std;
 
 #define EVENT_SIZE (sizeof(struct inotify_event))
@@ -38,7 +32,7 @@ struct FileNode
 	char name[0]; //
 	FileNode()
 	{
-		type = 1;
+		modifying = false;
 		parent_node = NULL;
 		child_node = NULL;
 		next_node = NULL;
@@ -67,7 +61,7 @@ private:
 	int PrintDirTree(FileNode* pnode,int level);
 
 private:
-	int m_fd,m_mask,m_subdir,m_filetype,m_destnum,m_errno;
+	int m_fd,m_epollfd,m_mask,m_subdir,m_filetype,m_destnum,m_errno;
 	bool m_bstarted;
 	char m_path[256],m_temppathbuf[256];
 

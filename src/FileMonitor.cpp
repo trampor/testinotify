@@ -6,6 +6,14 @@
  */
 
 #include "FileMonitor.h"
+#include <unistd.h>
+#include <stdio.h>
+#include <string.h>
+#include <sys/epoll.h>
+#include <sys/ioctl.h>
+#include <dirent.h>
+#include <string>
+#include <pthread.h>
 
 FileMonitor::FileMonitor(char* ppath,int mask,int subdir)
 :m_fd(-1),m_destnum(0),m_errno(0),m_bstarted(false),m_threadid(0),m_prootnode(NULL)
@@ -19,6 +27,37 @@ FileMonitor::FileMonitor(char* ppath,int mask,int subdir)
 	m_fd = inotify_init();
 	if(m_fd < 0)
 	{
+		cout << "inotify_init fail" << endl;
+		m_errno = -4;
+		return;
+	}
+
+	int nb = 1;
+	ioctl(m_fd,FIONBIO,&nb);
+
+	m_epollfd = epoll_create(2);
+	if(m_fd < 0)
+	{
+		cout << "epoll_create fail" << endl;
+		close(m_fd);
+		m_fd = -1;
+		m_errno = -4;
+		return;
+	}
+
+	struct epoll_event inotify_epoll_event;
+	int option = EPOLL_CTL_ADD;
+	inotify_epoll_event.events = EPOLLIN | EPOLLET;
+	inotify_epoll_event.data.ptr = &m_fd;
+
+	int result = epoll_ctl(m_epollfd,option,m_fd,&inotify_epoll_event);
+	if(result < 0)
+	{
+		cout << "epoll_ctl add event fail" << endl;
+		close(m_epollfd);
+		m_epollfd = -1;
+		close(m_fd);
+		m_fd = -1;
 		m_errno = -4;
 		return;
 	}
@@ -29,7 +68,7 @@ FileMonitor::FileMonitor(char* ppath,int mask,int subdir)
 }
 
 FileMonitor::~FileMonitor() {
-	// TODO Auto-generated destructor stub
+	StopMonitor();
 }
 
 FileNode* FileMonitor::AllocFileNode(char* pname)
@@ -151,6 +190,13 @@ int FileMonitor::StopMonitor()
 		close(m_fd);
 		m_fd = -1;
 		cout << "FileMonitor close fd suc" << endl;
+	}
+
+	if(m_epollfd >= 0)
+	{
+		close(m_epollfd);
+		m_epollfd = -1;
+		cout << "FileMonitor close epollfd suc" << endl;
 	}
 
 	return 0;
@@ -276,17 +322,15 @@ void* FileMonitor::ImpWorkThread()
 {
 	m_bstarted = true;
 	cout << "monitor thread "<< pthread_self() << " create suc, dest = " << m_path <<endl;
-	fd_set rfd;
-	struct timeval tv;
-	tv.tv_sec = 1;
-	tv.tv_usec = 0;
 	char inotifybuf[BUF_LEN];
-	int retval,event_length,i;
+	int event_length,i;
 	struct inotify_event *pevent;
 	char subdirstr[512];
+	struct epoll_event eventlist[2];
+	int events_num;
 	while(m_bstarted)
 	{
-		if(m_prootnode == NULL) //启动监控失败，或者监控过程中目标被删除，重新发现
+		if(m_prootnode == NULL) //启动监控失败，或者监控过程中目标被删除，重新建立
 		{
 			SetupMonitor();
 			if(m_prootnode == NULL)
@@ -296,411 +340,413 @@ void* FileMonitor::ImpWorkThread()
 			}
 		}
 
-		FD_ZERO(&rfd);
-		FD_SET(m_fd,&rfd);
-		retval = select(m_fd+1,&rfd,NULL,NULL,&tv);
-		if(retval == 0)
+		events_num = epoll_wait(m_epollfd,eventlist,2,500);
+		if(events_num < 0)
 		{
-			usleep(10000);
-			continue;
+			cout << "epoll_wait fail" << endl;
+			break;
 		}
-		else if(retval < 0)
-			break;
 
-		event_length = read(m_fd,inotifybuf,BUF_LEN);
-		if(event_length < 0)
-			break;
-		i=0;
-		while(i < event_length)
+		for(i=0;i<events_num;i++)
 		{
-			pevent = (struct inotify_event*)&inotifybuf[i];
-			if(pevent->len > 0)
+			if((eventlist[i].events & EPOLLIN) == 0)
+				continue;
+
+			event_length = read(m_fd,inotifybuf,BUF_LEN);
+			if(event_length < 0)
+				break;
+			i=0;
+			while(i < event_length)
 			{
-				if(pevent->mask & IN_CREATE)
+				pevent = (struct inotify_event*)&inotifybuf[i];
+				if(pevent->len > 0)
 				{
-					if(pevent->mask & IN_ISDIR)
+					if(pevent->mask & IN_CREATE)
 					{
-						cout << "recv a dir IN_CREATE notify : "<< pevent->wd <<" " << pevent->name << endl;
-						NodeIter nodeiter = m_wd2node.find(pevent->wd);
-						if(nodeiter != m_wd2node.end())
+						if(pevent->mask & IN_ISDIR)
 						{
-							Recursive_Add_Watch(pevent->name,nodeiter->second);
-							PrintDirTree(m_prootnode,0);
+							cout << "recv a dir IN_CREATE notify : "<< pevent->wd <<" " << pevent->name << endl;
+							NodeIter nodeiter = m_wd2node.find(pevent->wd);
+							if(nodeiter != m_wd2node.end())
+							{
+								Recursive_Add_Watch(pevent->name,nodeiter->second);
+								PrintDirTree(m_prootnode,0);
+							}
+						}
+						else
+						{
+							cout << "recv a file IN_CREATE notify : "<< pevent->wd <<" " << pevent->name << endl;
 						}
 					}
-					else
+					else if(pevent->mask & IN_MODIFY)
 					{
-						cout << "recv a file IN_CREATE notify : "<< pevent->wd <<" " << pevent->name << endl;
-					}
-				}
-				else if(pevent->mask & IN_MODIFY)
-				{
-					if(pevent->mask & IN_ISDIR)
-					{
-						cout << "recv a dir IN_MODIFY notify : "<< pevent->wd  <<" "<< pevent->name << endl;
-					}
-					else
-					{
-						cout << "recv a file IN_MODIFY notify : "<< pevent->wd  <<" "<< pevent->name << endl;
-					}
-				}
-				else if(pevent->mask & IN_DELETE)
-				{
-					if(pevent->mask & IN_ISDIR)
-					{
-						cout << "recv a dir IN_DELETE notify : "<< pevent->wd  <<" "<< pevent->name << endl;
-
-						NodeIter nodeiter = m_wd2node.find(pevent->wd);
-						if(nodeiter != m_wd2node.end())
+						if(pevent->mask & IN_ISDIR)
 						{
-							Delete_SubDir(nodeiter->second,pevent->name);
-							PrintDirTree(m_prootnode,0);
+							cout << "recv a dir IN_MODIFY notify : "<< pevent->wd  <<" "<< pevent->name << endl;
+						}
+						else
+						{
+							cout << "recv a file IN_MODIFY notify : "<< pevent->wd  <<" "<< pevent->name << endl;
 						}
 					}
-					else
+					else if(pevent->mask & IN_DELETE)
 					{
-						cout << "recv a file IN_DELETE notify : "<< pevent->wd  <<" "<< pevent->name << endl;
-					}
-				}
-				else if(pevent->mask & IN_DELETE_SELF)
-				{
-					if(pevent->mask & IN_ISDIR)
-					{
-						cout << "recv a dir IN_DELETE_SELF notify : "<< pevent->wd  <<" "<< pevent->name << endl;
-					}
-					else
-					{
-						cout << "recv a file IN_DELETE_SELF notify : "<< pevent->wd  <<" "<< pevent->name << endl;
-					}
-				}
-				else if(pevent->mask & IN_ACCESS)
-				{
-					if(pevent->mask & IN_ISDIR)
-					{
-						cout << "recv a dir IN_ACCESS notify : "<< pevent->wd  <<" "<< pevent->name << endl;
-
-					}
-					else
-					{
-						cout << "recv a file IN_ACCESS notify : "<< pevent->wd  <<" "<< pevent->name << endl;
-					}
-				}
-				else if(pevent->mask & IN_ATTRIB)
-				{
-					if(pevent->mask & IN_ISDIR)
-					{
-						cout << "recv a dir IN_ATTRIB notify : "<< pevent->wd  <<" "<< pevent->name << endl;
-					}
-					else
-					{
-						cout << "recv a file IN_ATTRIB notify : "<< pevent->wd  <<" "<< pevent->name << endl;
-					}
-				}
-				else if(pevent->mask & IN_CLOSE)
-				{
-					if(pevent->mask & IN_ISDIR)
-					{
-//						cout << "recv a dir IN_CLOSE notify : "<< pevent->wd  <<" "<< pevent->name << endl;
-
-					}
-					else
-					{
-						cout << "recv a file IN_CLOSE notify : "<< pevent->wd  <<" "<< pevent->name << endl;
-					}
-				}
-				else if(pevent->mask & IN_OPEN)
-				{
-					if(pevent->mask & IN_ISDIR)
-					{
-//						cout << "recv a dir IN_OPEN notify : "<< pevent->wd  <<" "<< pevent->name << endl;
-
-					}
-					else
-					{
-						cout << "recv a file IN_OPEN notify : "<< pevent->wd  <<" "<< pevent->name << endl;
-					}
-				}
-				else if(pevent->mask & IN_MOVED_FROM)
-				{
-					if(pevent->mask & IN_ISDIR)
-					{
-						cout << "recv a dir IN_MOVE_FROM notify : "<< pevent->wd  <<" "<< pevent->name << endl;
-
-						NodeIter nodeiter = m_wd2node.find(pevent->wd);
-						if(nodeiter != m_wd2node.end())
+						if(pevent->mask & IN_ISDIR)
 						{
-							Delete_SubDir(nodeiter->second,pevent->name);
-							PrintDirTree(m_prootnode,0);
+							cout << "recv a dir IN_DELETE notify : "<< pevent->wd  <<" "<< pevent->name << endl;
+
+							NodeIter nodeiter = m_wd2node.find(pevent->wd);
+							if(nodeiter != m_wd2node.end())
+							{
+								Delete_SubDir(nodeiter->second,pevent->name);
+								PrintDirTree(m_prootnode,0);
+							}
+						}
+						else
+						{
+							cout << "recv a file IN_DELETE notify : "<< pevent->wd  <<" "<< pevent->name << endl;
 						}
 					}
-					else
+					else if(pevent->mask & IN_DELETE_SELF)
 					{
-						cout << "recv a file IN_MOVE_FROM notify : "<< pevent->wd  <<" "<< pevent->name << endl;
-					}
-				}
-				else if(pevent->mask & IN_MOVED_TO)
-				{
-					if(pevent->mask & IN_ISDIR)
-					{
-						cout << "recv a dir IN_MOVE_TO notify : "<< pevent->wd  <<" "<< pevent->name << endl;
-
-						NodeIter nodeiter = m_wd2node.find(pevent->wd);
-						if(nodeiter != m_wd2node.end())
+						if(pevent->mask & IN_ISDIR)
 						{
-							sprintf(subdirstr,"%s/%s",nodeiter->second->name,pevent->name);
-							Recursive_Add_Watch(subdirstr,nodeiter->second);
-							PrintDirTree(m_prootnode,0);
+							cout << "recv a dir IN_DELETE_SELF notify : "<< pevent->wd  <<" "<< pevent->name << endl;
+						}
+						else
+						{
+							cout << "recv a file IN_DELETE_SELF notify : "<< pevent->wd  <<" "<< pevent->name << endl;
 						}
 					}
-					else
+					else if(pevent->mask & IN_ACCESS)
 					{
-						cout << "recv a file IN_MOVE_TO notify : "<< pevent->wd  <<" "<< pevent->name << endl;
-					}
-				}
-				else if(pevent->mask & IN_MOVE_SELF)
-				{
-					if(pevent->mask & IN_ISDIR)
-					{
-						cout << "recv a dir IN_MOVE_SELF notify : "<< pevent->wd  <<" "<< pevent->name << endl;
+						if(pevent->mask & IN_ISDIR)
+						{
+							cout << "recv a dir IN_ACCESS notify : "<< pevent->wd  <<" "<< pevent->name << endl;
 
+						}
+						else
+						{
+							cout << "recv a file IN_ACCESS notify : "<< pevent->wd  <<" "<< pevent->name << endl;
+						}
 					}
-					else
+					else if(pevent->mask & IN_ATTRIB)
 					{
-						cout << "recv a file IN_MOVE_SELF notify : "<< pevent->wd  <<" "<< pevent->name << endl;
+						if(pevent->mask & IN_ISDIR)
+						{
+							cout << "recv a dir IN_ATTRIB notify : "<< pevent->wd  <<" "<< pevent->name << endl;
+						}
+						else
+						{
+							cout << "recv a file IN_ATTRIB notify : "<< pevent->wd  <<" "<< pevent->name << endl;
+						}
+					}
+					else if(pevent->mask & IN_CLOSE)
+					{
+						if(pevent->mask & IN_ISDIR)
+						{
+	//						cout << "recv a dir IN_CLOSE notify : "<< pevent->wd  <<" "<< pevent->name << endl;
+
+						}
+						else
+						{
+							cout << "recv a file IN_CLOSE notify : "<< pevent->wd  <<" "<< pevent->name << endl;
+						}
+					}
+					else if(pevent->mask & IN_OPEN)
+					{
+						if(pevent->mask & IN_ISDIR)
+						{
+	//						cout << "recv a dir IN_OPEN notify : "<< pevent->wd  <<" "<< pevent->name << endl;
+
+						}
+						else
+						{
+							cout << "recv a file IN_OPEN notify : "<< pevent->wd  <<" "<< pevent->name << endl;
+						}
+					}
+					else if(pevent->mask & IN_MOVED_FROM)
+					{
+						if(pevent->mask & IN_ISDIR)
+						{
+							cout << "recv a dir IN_MOVE_FROM notify : "<< pevent->wd  <<" "<< pevent->name << endl;
+
+							NodeIter nodeiter = m_wd2node.find(pevent->wd);
+							if(nodeiter != m_wd2node.end())
+							{
+								Delete_SubDir(nodeiter->second,pevent->name);
+								PrintDirTree(m_prootnode,0);
+							}
+						}
+						else
+						{
+							cout << "recv a file IN_MOVE_FROM notify : "<< pevent->wd  <<" "<< pevent->name << endl;
+						}
+					}
+					else if(pevent->mask & IN_MOVED_TO)
+					{
+						if(pevent->mask & IN_ISDIR)
+						{
+							cout << "recv a dir IN_MOVE_TO notify : "<< pevent->wd  <<" "<< pevent->name << endl;
+
+							NodeIter nodeiter = m_wd2node.find(pevent->wd);
+							if(nodeiter != m_wd2node.end())
+							{
+								sprintf(subdirstr,"%s/%s",nodeiter->second->name,pevent->name);
+								Recursive_Add_Watch(subdirstr,nodeiter->second);
+								PrintDirTree(m_prootnode,0);
+							}
+						}
+						else
+						{
+							cout << "recv a file IN_MOVE_TO notify : "<< pevent->wd  <<" "<< pevent->name << endl;
+						}
+					}
+					else if(pevent->mask & IN_MOVE_SELF)
+					{
+						if(pevent->mask & IN_ISDIR)
+						{
+							cout << "recv a dir IN_MOVE_SELF notify : "<< pevent->wd  <<" "<< pevent->name << endl;
+
+						}
+						else
+						{
+							cout << "recv a file IN_MOVE_SELF notify : "<< pevent->wd  <<" "<< pevent->name << endl;
+						}
 					}
 				}
+				else //event->len == 0
+				{
+					if(pevent->mask & IN_CREATE)
+					{
+						if(pevent->mask & IN_ISDIR)
+						{
+							NodeIter nodeiter = m_wd2node.find(pevent->wd);
+							if(nodeiter != m_wd2node.end())
+							{
+								cout << "recv root dir IN_CREATE notify : "<< pevent->wd <<" " << nodeiter->second->name << endl;
+								Recursive_Add_Watch(nodeiter->second->name,nodeiter->second);
+								PrintDirTree(m_prootnode,0);
+							}
+						}
+						else
+						{
+							NodeIter nodeiter = m_wd2node.find(pevent->wd);
+							if(nodeiter != m_wd2node.end())
+							{
+								cout << "recv root file IN_CREATE notify : "<< pevent->wd <<" " << nodeiter->second->name << endl;
+							}
+						}
+					}
+					else if(pevent->mask & IN_MODIFY)
+					{
+						if(pevent->mask & IN_ISDIR)
+						{
+							NodeIter nodeiter = m_wd2node.find(pevent->wd);
+							if(nodeiter != m_wd2node.end())
+							{
+								cout << "recv root dir IN_MODIFY notify : "<< pevent->wd  <<" "<< nodeiter->second->name << endl;
+							}
+						}
+						else
+						{
+							NodeIter nodeiter = m_wd2node.find(pevent->wd);
+							if(nodeiter != m_wd2node.end())
+							{
+								cout << "recv root file IN_MODIFY notify : "<< pevent->wd  <<" "<< nodeiter->second->name << endl;
+							}
+						}
+					}
+					else if(pevent->mask & IN_DELETE)
+					{
+						if(pevent->mask & IN_ISDIR)
+						{
+							NodeIter nodeiter = m_wd2node.find(pevent->wd);
+							if(nodeiter != m_wd2node.end())
+							{
+								cout << "recv root dir IN_DELETE notify : "<< pevent->wd  <<" "<< nodeiter->second->name << endl;
+								Delete_SubDir(nodeiter->second,pevent->name);
+								PrintDirTree(m_prootnode,0);
+							}
+						}
+						else
+						{
+							NodeIter nodeiter = m_wd2node.find(pevent->wd);
+							if(nodeiter != m_wd2node.end())
+							{
+								cout << "recv root file IN_DELETE notify : "<< pevent->wd  <<" "<< nodeiter->second->name << endl;
+							}
+						}
+					}
+					else if(pevent->mask & IN_DELETE_SELF)
+					{
+						if(pevent->mask & IN_ISDIR)
+						{
+							NodeIter nodeiter = m_wd2node.find(pevent->wd);
+							if(nodeiter != m_wd2node.end())
+							{
+								cout << "recv root dir IN_DELETE_SELF notify : "<< pevent->wd  <<" "<< nodeiter->second->name << endl;
+								Recursive_Delete_Node(nodeiter->second);
+							}
+						}
+						else
+						{
+							NodeIter nodeiter = m_wd2node.find(pevent->wd);
+							if(nodeiter != m_wd2node.end())
+							{
+								cout << "recv root file IN_DELETE_SELF notify : "<< pevent->wd  <<" "<< nodeiter->second->name << endl;
+								Recursive_Delete_Node(nodeiter->second);
+							}
+						}
+					}
+					else if(pevent->mask & IN_ACCESS)
+					{
+						if(pevent->mask & IN_ISDIR)
+						{
+							NodeIter nodeiter = m_wd2node.find(pevent->wd);
+							if(nodeiter != m_wd2node.end())
+							{
+								cout << "recv root dir IN_ACCESS notify : "<< pevent->wd  <<" "<< nodeiter->second->name << endl;
+							}
+
+						}
+						else
+						{
+							NodeIter nodeiter = m_wd2node.find(pevent->wd);
+							if(nodeiter != m_wd2node.end())
+							{
+								cout << "recv root file IN_ACCESS notify : "<< pevent->wd  <<" "<< nodeiter->second->name << endl;
+							}
+						}
+					}
+					else if(pevent->mask & IN_ATTRIB)
+					{
+						if(pevent->mask & IN_ISDIR)
+						{
+							NodeIter nodeiter = m_wd2node.find(pevent->wd);
+							if(nodeiter != m_wd2node.end())
+							{
+								cout << "recv root dir IN_ATTRIB notify : "<< pevent->wd  <<" "<< nodeiter->second->name << endl;
+							}
+						}
+						else
+						{
+							NodeIter nodeiter = m_wd2node.find(pevent->wd);
+							if(nodeiter != m_wd2node.end())
+							{
+								cout << "recv root file IN_ATTRIB notify : "<< pevent->wd  <<" "<< nodeiter->second->name << endl;
+							}
+						}
+					}
+					else if(pevent->mask & IN_CLOSE)
+					{
+						if(pevent->mask & IN_ISDIR)
+						{
+							NodeIter nodeiter = m_wd2node.find(pevent->wd);
+							if(nodeiter != m_wd2node.end())
+							{
+	//							cout << "recv root dir IN_CLOSE notify : "<< pevent->wd  <<" "<< nodeiter->second->name << endl;
+							}
+
+						}
+						else
+						{
+							NodeIter nodeiter = m_wd2node.find(pevent->wd);
+							if(nodeiter != m_wd2node.end())
+							{
+								cout << "recv root file IN_CLOSE notify : "<< pevent->wd  <<" "<< nodeiter->second->name << endl;
+							}
+						}
+					}
+					else if(pevent->mask & IN_OPEN)
+					{
+						if(pevent->mask & IN_ISDIR)
+						{
+							NodeIter nodeiter = m_wd2node.find(pevent->wd);
+							if(nodeiter != m_wd2node.end())
+							{
+	//							cout << "recv root dir IN_OPEN notify : "<< pevent->wd  <<" "<< nodeiter->second->name << endl;
+							}
+
+						}
+						else
+						{
+							NodeIter nodeiter = m_wd2node.find(pevent->wd);
+							if(nodeiter != m_wd2node.end())
+							{
+								cout << "recv root file IN_OPEN notify : "<< pevent->wd  <<" "<< nodeiter->second->name << endl;
+							}
+						}
+					}
+					else if(pevent->mask & IN_MOVED_FROM)
+					{
+						if(pevent->mask & IN_ISDIR)
+						{
+
+							NodeIter nodeiter = m_wd2node.find(pevent->wd);
+							if(nodeiter != m_wd2node.end())
+							{
+								cout << "recv root dir IN_MOVE_FROM notify : "<< pevent->wd  <<" "<< nodeiter->second->name << endl;
+								Recursive_Delete_Node(nodeiter->second);
+							}
+						}
+						else
+						{
+							NodeIter nodeiter = m_wd2node.find(pevent->wd);
+							if(nodeiter != m_wd2node.end())
+							{
+								cout << "recv root file IN_MOVE_FROM notify : "<< pevent->wd  <<" "<< nodeiter->second->name << endl;
+								Recursive_Delete_Node(nodeiter->second);
+							}
+						}
+					}
+					else if(pevent->mask & IN_MOVED_TO)
+					{
+						if(pevent->mask & IN_ISDIR)
+						{
+
+							NodeIter nodeiter = m_wd2node.find(pevent->wd);
+							if(nodeiter != m_wd2node.end())
+							{
+								cout << "recv root dir IN_MOVE_TO notify : "<< pevent->wd  <<" "<< nodeiter->second->name << endl;
+	//							sprintf(subdirstr,"%s/%s",nodeiter->second->name,pevent->name);
+	//							Recursive_Add_Watch(subdirstr,nodeiter->second);
+	//							PrintDirTree(m_prootnode,0);
+							}
+						}
+						else
+						{
+							NodeIter nodeiter = m_wd2node.find(pevent->wd);
+							if(nodeiter != m_wd2node.end())
+							{
+								cout << "recv root file IN_MOVE_TO notify : "<< pevent->wd  <<" "<< nodeiter->second->name << endl;
+							}
+						}
+					}
+					else if(pevent->mask & IN_MOVE_SELF)
+					{
+						if(pevent->mask & IN_ISDIR)
+						{
+							NodeIter nodeiter = m_wd2node.find(pevent->wd);
+							if(nodeiter != m_wd2node.end())
+							{
+								cout << "recv root dir IN_MOVE_SELF notify : "<< pevent->wd  <<" "<< nodeiter->second->name << endl;
+								Recursive_Delete_Node(nodeiter->second);
+							}
+						}
+						else
+						{
+							NodeIter nodeiter = m_wd2node.find(pevent->wd);
+							if(nodeiter != m_wd2node.end())
+							{
+								cout << "recv root file IN_MOVE_SELF notify : "<< pevent->wd  <<" "<< nodeiter->second->name << endl;
+								Recursive_Delete_Node(nodeiter->second);
+							}
+						}
+					}
+				}
+				i += EVENT_SIZE + pevent->len;
 			}
-			else //event->len == 0
-			{
-				if(pevent->mask & IN_CREATE)
-				{
-					if(pevent->mask & IN_ISDIR)
-					{
-						NodeIter nodeiter = m_wd2node.find(pevent->wd);
-						if(nodeiter != m_wd2node.end())
-						{
-							cout << "recv root dir IN_CREATE notify : "<< pevent->wd <<" " << nodeiter->second->name << endl;
-							Recursive_Add_Watch(nodeiter->second->name,nodeiter->second);
-							PrintDirTree(m_prootnode,0);
-						}
-					}
-					else
-					{
-						NodeIter nodeiter = m_wd2node.find(pevent->wd);
-						if(nodeiter != m_wd2node.end())
-						{
-							cout << "recv root file IN_CREATE notify : "<< pevent->wd <<" " << nodeiter->second->name << endl;
-						}
-					}
-				}
-				else if(pevent->mask & IN_MODIFY)
-				{
-					if(pevent->mask & IN_ISDIR)
-					{
-						NodeIter nodeiter = m_wd2node.find(pevent->wd);
-						if(nodeiter != m_wd2node.end())
-						{
-							cout << "recv root dir IN_MODIFY notify : "<< pevent->wd  <<" "<< nodeiter->second->name << endl;
-						}
-					}
-					else
-					{
-						NodeIter nodeiter = m_wd2node.find(pevent->wd);
-						if(nodeiter != m_wd2node.end())
-						{
-							cout << "recv root file IN_MODIFY notify : "<< pevent->wd  <<" "<< nodeiter->second->name << endl;
-						}
-					}
-				}
-				else if(pevent->mask & IN_DELETE)
-				{
-					if(pevent->mask & IN_ISDIR)
-					{
-						NodeIter nodeiter = m_wd2node.find(pevent->wd);
-						if(nodeiter != m_wd2node.end())
-						{
-							cout << "recv root dir IN_DELETE notify : "<< pevent->wd  <<" "<< nodeiter->second->name << endl;
-							Delete_SubDir(nodeiter->second,pevent->name);
-							PrintDirTree(m_prootnode,0);
-						}
-					}
-					else
-					{
-						NodeIter nodeiter = m_wd2node.find(pevent->wd);
-						if(nodeiter != m_wd2node.end())
-						{
-							cout << "recv root file IN_DELETE notify : "<< pevent->wd  <<" "<< nodeiter->second->name << endl;
-						}
-					}
-				}
-				else if(pevent->mask & IN_DELETE_SELF)
-				{
-					if(pevent->mask & IN_ISDIR)
-					{
-						NodeIter nodeiter = m_wd2node.find(pevent->wd);
-						if(nodeiter != m_wd2node.end())
-						{
-							cout << "recv root dir IN_DELETE_SELF notify : "<< pevent->wd  <<" "<< nodeiter->second->name << endl;
-							Recursive_Delete_Node(nodeiter->second);
-						}
-					}
-					else
-					{
-						NodeIter nodeiter = m_wd2node.find(pevent->wd);
-						if(nodeiter != m_wd2node.end())
-						{
-							cout << "recv root file IN_DELETE_SELF notify : "<< pevent->wd  <<" "<< nodeiter->second->name << endl;
-							Recursive_Delete_Node(nodeiter->second);
-						}
-					}
-				}
-				else if(pevent->mask & IN_ACCESS)
-				{
-					if(pevent->mask & IN_ISDIR)
-					{
-						NodeIter nodeiter = m_wd2node.find(pevent->wd);
-						if(nodeiter != m_wd2node.end())
-						{
-							cout << "recv root dir IN_ACCESS notify : "<< pevent->wd  <<" "<< nodeiter->second->name << endl;
-						}
-
-					}
-					else
-					{
-						NodeIter nodeiter = m_wd2node.find(pevent->wd);
-						if(nodeiter != m_wd2node.end())
-						{
-							cout << "recv root file IN_ACCESS notify : "<< pevent->wd  <<" "<< nodeiter->second->name << endl;
-						}
-					}
-				}
-				else if(pevent->mask & IN_ATTRIB)
-				{
-					if(pevent->mask & IN_ISDIR)
-					{
-						NodeIter nodeiter = m_wd2node.find(pevent->wd);
-						if(nodeiter != m_wd2node.end())
-						{
-							cout << "recv root dir IN_ATTRIB notify : "<< pevent->wd  <<" "<< nodeiter->second->name << endl;
-						}
-					}
-					else
-					{
-						NodeIter nodeiter = m_wd2node.find(pevent->wd);
-						if(nodeiter != m_wd2node.end())
-						{
-							cout << "recv root file IN_ATTRIB notify : "<< pevent->wd  <<" "<< nodeiter->second->name << endl;
-						}
-					}
-				}
-				else if(pevent->mask & IN_CLOSE)
-				{
-					if(pevent->mask & IN_ISDIR)
-					{
-						NodeIter nodeiter = m_wd2node.find(pevent->wd);
-						if(nodeiter != m_wd2node.end())
-						{
-//							cout << "recv root dir IN_CLOSE notify : "<< pevent->wd  <<" "<< nodeiter->second->name << endl;
-						}
-
-					}
-					else
-					{
-						NodeIter nodeiter = m_wd2node.find(pevent->wd);
-						if(nodeiter != m_wd2node.end())
-						{
-							cout << "recv root file IN_CLOSE notify : "<< pevent->wd  <<" "<< nodeiter->second->name << endl;
-						}
-					}
-				}
-				else if(pevent->mask & IN_OPEN)
-				{
-					if(pevent->mask & IN_ISDIR)
-					{
-						NodeIter nodeiter = m_wd2node.find(pevent->wd);
-						if(nodeiter != m_wd2node.end())
-						{
-//							cout << "recv root dir IN_OPEN notify : "<< pevent->wd  <<" "<< nodeiter->second->name << endl;
-						}
-
-					}
-					else
-					{
-						NodeIter nodeiter = m_wd2node.find(pevent->wd);
-						if(nodeiter != m_wd2node.end())
-						{
-							cout << "recv root file IN_OPEN notify : "<< pevent->wd  <<" "<< nodeiter->second->name << endl;
-						}
-					}
-				}
-				else if(pevent->mask & IN_MOVED_FROM)
-				{
-					if(pevent->mask & IN_ISDIR)
-					{
-
-						NodeIter nodeiter = m_wd2node.find(pevent->wd);
-						if(nodeiter != m_wd2node.end())
-						{
-							cout << "recv root dir IN_MOVE_FROM notify : "<< pevent->wd  <<" "<< nodeiter->second->name << endl;
-							Recursive_Delete_Node(nodeiter->second);
-						}
-					}
-					else
-					{
-						NodeIter nodeiter = m_wd2node.find(pevent->wd);
-						if(nodeiter != m_wd2node.end())
-						{
-							cout << "recv root file IN_MOVE_FROM notify : "<< pevent->wd  <<" "<< nodeiter->second->name << endl;
-							Recursive_Delete_Node(nodeiter->second);
-						}
-					}
-				}
-				else if(pevent->mask & IN_MOVED_TO)
-				{
-					if(pevent->mask & IN_ISDIR)
-					{
-
-						NodeIter nodeiter = m_wd2node.find(pevent->wd);
-						if(nodeiter != m_wd2node.end())
-						{
-							cout << "recv root dir IN_MOVE_TO notify : "<< pevent->wd  <<" "<< nodeiter->second->name << endl;
-//							sprintf(subdirstr,"%s/%s",nodeiter->second->name,pevent->name);
-//							Recursive_Add_Watch(subdirstr,nodeiter->second);
-//							PrintDirTree(m_prootnode,0);
-						}
-					}
-					else
-					{
-						NodeIter nodeiter = m_wd2node.find(pevent->wd);
-						if(nodeiter != m_wd2node.end())
-						{
-							cout << "recv root file IN_MOVE_TO notify : "<< pevent->wd  <<" "<< nodeiter->second->name << endl;
-						}
-					}
-				}
-				else if(pevent->mask & IN_MOVE_SELF)
-				{
-					if(pevent->mask & IN_ISDIR)
-					{
-						NodeIter nodeiter = m_wd2node.find(pevent->wd);
-						if(nodeiter != m_wd2node.end())
-						{
-							cout << "recv root dir IN_MOVE_SELF notify : "<< pevent->wd  <<" "<< nodeiter->second->name << endl;
-							Recursive_Delete_Node(nodeiter->second);
-						}
-					}
-					else
-					{
-						NodeIter nodeiter = m_wd2node.find(pevent->wd);
-						if(nodeiter != m_wd2node.end())
-						{
-							cout << "recv root file IN_MOVE_SELF notify : "<< pevent->wd  <<" "<< nodeiter->second->name << endl;
-							Recursive_Delete_Node(nodeiter->second);
-						}
-					}
-				}
-			}
-			i += EVENT_SIZE + pevent->len;
 		}
 	}
 	cout << "monitor thread " <<pthread_self() << " exit suc" << endl;
