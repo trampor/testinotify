@@ -16,22 +16,6 @@ FileMonitor::FileMonitor(char* ppath,int mask,int subdir)
 		return;
 	}
 
-	struct stat filestat;
-	if(lstat(ppath,&filestat) < 0)
-	{
-		m_errno = -2;
-		return;
-	}
-	if(S_ISDIR(filestat.st_mode)) //dir
-		m_filetype = 0;
-	else if(S_ISREG(filestat.st_mode)) //file
-		m_filetype = 1;
-	else
-	{
-		m_errno = -3;
-		return;
-	}
-
 	m_fd = inotify_init();
 	if(m_fd < 0)
 	{
@@ -83,13 +67,6 @@ int FileMonitor::StartMonitor()
 		return m_errno;
 	}
 
-	if(m_filetype < 0  || m_filetype > 1)
-		m_errno = -3;
-
-	if(m_errno < 0)
-		return m_errno;
-
-	PrintDirTree(m_prootnode,0);
 	pthread_create(&m_threadid,NULL,FileMonitor::WorkThread,this);
 
 	return 0;
@@ -97,6 +74,23 @@ int FileMonitor::StartMonitor()
 
 int FileMonitor::SetupMonitor()
 {
+	struct stat filestat;
+	if(lstat(m_path,&filestat) < 0)
+	{
+		m_errno = -2;
+		return m_errno;
+	}
+
+	if(S_ISDIR(filestat.st_mode)) //dir
+		m_filetype = 0;
+	else if(S_ISREG(filestat.st_mode)) //file
+		m_filetype = 1;
+	else
+	{
+		m_errno = -3;
+		return m_errno;
+	}
+
 	if(m_filetype == 0) //dir
 	{
 		Recursive_Add_Watch(m_path,NULL);
@@ -131,11 +125,9 @@ int FileMonitor::SetupMonitor()
 			m_prootnode = node;
 		}
 	}
-	else //unknown file type
-		m_errno = -3;
 
 	if(m_wd2node.size() > 0)
-		cout<< "find monitor dest,total " << m_wd2node.size() << "s" << endl;
+		cout<< "find monitor dest,total " << m_wd2node.size() << "s monitor dest" << endl;
 
 	return 0;
 }
@@ -647,8 +639,7 @@ void* FileMonitor::ImpWorkThread()
 						if(nodeiter != m_wd2node.end())
 						{
 							cout << "recv root dir IN_MOVE_FROM notify : "<< pevent->wd  <<" "<< nodeiter->second->name << endl;
-//							Delete_SubDir(nodeiter->second,pevent->name);
-//							PrintDirTree(m_prootnode,0);
+							Recursive_Delete_Node(nodeiter->second);
 						}
 					}
 					else
@@ -657,6 +648,7 @@ void* FileMonitor::ImpWorkThread()
 						if(nodeiter != m_wd2node.end())
 						{
 							cout << "recv root file IN_MOVE_FROM notify : "<< pevent->wd  <<" "<< nodeiter->second->name << endl;
+							Recursive_Delete_Node(nodeiter->second);
 						}
 					}
 				}
@@ -691,8 +683,8 @@ void* FileMonitor::ImpWorkThread()
 						if(nodeiter != m_wd2node.end())
 						{
 							cout << "recv root dir IN_MOVE_SELF notify : "<< pevent->wd  <<" "<< nodeiter->second->name << endl;
+							Recursive_Delete_Node(nodeiter->second);
 						}
-
 					}
 					else
 					{
@@ -700,6 +692,7 @@ void* FileMonitor::ImpWorkThread()
 						if(nodeiter != m_wd2node.end())
 						{
 							cout << "recv root file IN_MOVE_SELF notify : "<< pevent->wd  <<" "<< nodeiter->second->name << endl;
+							Recursive_Delete_Node(nodeiter->second);
 						}
 					}
 				}
