@@ -140,14 +140,17 @@ int FileMonitor::StopMonitor()
 		pthread_join(m_threadid,NULL);
 	}
 
-	ClearData();
-	cout << "filechangemonitor clear data suc" << endl;
+	if(m_wd2node.size() > 0)
+	{
+		ClearData();
+		cout << "FileMonitor clear data suc" << endl;
+	}
 
 	if(m_fd >= 0)
 	{
 		close(m_fd);
 		m_fd = -1;
-		cout << "filechangemonitor close fd suc" << endl;
+		cout << "FileMonitor close fd suc" << endl;
 	}
 
 	return 0;
