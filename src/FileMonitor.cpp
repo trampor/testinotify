@@ -166,7 +166,7 @@ int FileMonitor::SetupMonitor()
 	}
 
 	if(m_wd2node.size() > 0)
-		cout<< "find monitor dest,total " << m_wd2node.size() << "s monitor dest" << endl;
+		cout<< "find monitor dest,total " << m_wd2node.size() << " monitor dests" << endl;
 
 	return 0;
 }
