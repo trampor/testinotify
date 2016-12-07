@@ -134,6 +134,9 @@ int FileMonitor::SetupMonitor()
 	else //unknown file type
 		m_errno = -3;
 
+	if(m_wd2node.size() > 0)
+		cout<< "find monitor dest,total " << m_wd2node.size() << "s" << endl;
+
 	return 0;
 }
 
