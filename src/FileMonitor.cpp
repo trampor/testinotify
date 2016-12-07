@@ -113,16 +113,15 @@ int FileMonitor::StartMonitor()
 
 int FileMonitor::SetupMonitor()
 {
-	struct stat filestat;
-	if(lstat(m_path,&filestat) < 0)
+	if(lstat(m_path,&m_filestat) < 0)
 	{
 		m_errno = -2;
 		return m_errno;
 	}
 
-	if(S_ISDIR(filestat.st_mode)) //dir
+	if(S_ISDIR(m_filestat.st_mode)) //dir
 		m_filetype = 0;
-	else if(S_ISREG(filestat.st_mode)) //file
+	else if(S_ISREG(m_filestat.st_mode)) //file
 		m_filetype = 1;
 	else
 	{
@@ -229,10 +228,10 @@ int FileMonitor::Recursive_Add_Watch(char* path,FileNode* pparent)
 	{
 		subdirstr.insert(0,ptempnode->name);
 		ptempnode = ptempnode->parent_node;
-		if(ptempnode != NULL)
+		if(ptempnode != NULL && strlen(ptempnode->name)>0 && ptempnode->name[strlen(ptempnode->name)-1] != '/')
 			subdirstr.insert(0,"/");
 	}
-	if(!subdirstr.empty())
+	if(!subdirstr.empty() && subdirstr[subdirstr.size()-1] != '/')
 		subdirstr.append("/");
 	subdirstr.append(path);
 
@@ -301,13 +300,53 @@ int FileMonitor::Recursive_Add_Watch(char* path,FileNode* pparent)
 
 			sprintf(m_temppathbuf,"%s/%s",subdirstr.c_str(),dent->d_name);
 			stat(m_path,&m_filestat);
-			node->size = m_filestat.st_size;
-			node->st_mtim = m_filestat.st_mtim;
-			node->modifying = 0;
+			pfilenode->size = m_filestat.st_size;
+			pfilenode->st_mtim = m_filestat.st_mtim;
+			pfilenode->modifying = 0;
 		}
 	}
 
 	closedir(curdir);
+
+	return 0;
+}
+
+int FileMonitor::Add_File(FileNode* pparent,char* pfilename)
+{
+	string subdirstr;
+	FileNode* ptempnode = pparent;
+	while(ptempnode != NULL)
+	{
+		subdirstr.insert(0,ptempnode->name);
+		ptempnode = ptempnode->parent_node;
+		if(ptempnode != NULL && strlen(ptempnode->name)>0 && ptempnode->name[strlen(ptempnode->name)-1] != '/')
+			subdirstr.insert(0,"/");
+	}
+	if(!subdirstr.empty() && subdirstr[subdirstr.size()-1] != '/')
+		subdirstr.append("/");
+	subdirstr.append(pfilename);
+
+	stat(subdirstr.c_str(),&m_filestat);
+	if(S_ISREG(m_filestat.st_mode)) //file
+	{
+		FileNode* pfilenode = AllocFileNode(pfilename);
+		pfilenode->wd = pparent->wd;
+		pfilenode->type = 1;
+		strcpy(&pfilenode->name[0],pfilename);
+
+		pfilenode->parent_node = pparent;
+		if(pparent->child_node == NULL)
+			pparent->child_node = pfilenode;
+		else
+		{
+			pfilenode->next_node = pparent->child_node;
+			pparent->child_node = pfilenode;
+		}
+
+		pfilenode->size = m_filestat.st_size;
+		pfilenode->st_mtim = m_filestat.st_mtim;
+		pfilenode->modifying = 0;
+	}
 
 	return 0;
 }
@@ -376,6 +415,12 @@ void* FileMonitor::ImpWorkThread()
 						else
 						{
 							cout << "recv a file IN_CREATE notify : "<< pevent->wd <<" " << pevent->name << endl;
+							NodeIter nodeiter = m_wd2node.find(pevent->wd);
+							if(nodeiter != m_wd2node.end())
+							{
+								Add_File(nodeiter->second,pevent->name);
+								PrintDirTree(m_prootnode,0);
+							}
 						}
 					}
 					else if(pevent->mask & IN_MODIFY)
@@ -405,6 +450,13 @@ void* FileMonitor::ImpWorkThread()
 						else
 						{
 							cout << "recv a file IN_DELETE notify : "<< pevent->wd  <<" "<< pevent->name << endl;
+
+							NodeIter nodeiter = m_wd2node.find(pevent->wd);
+							if(nodeiter != m_wd2node.end())
+							{
+								Delete_SubDir(nodeiter->second,pevent->name);
+								PrintDirTree(m_prootnode,0);
+							}
 						}
 					}
 					else if(pevent->mask & IN_DELETE_SELF)
@@ -481,6 +533,12 @@ void* FileMonitor::ImpWorkThread()
 						else
 						{
 							cout << "recv a file IN_MOVE_FROM notify : "<< pevent->wd  <<" "<< pevent->name << endl;
+							NodeIter nodeiter = m_wd2node.find(pevent->wd);
+							if(nodeiter != m_wd2node.end())
+							{
+								Delete_SubDir(nodeiter->second,pevent->name);
+								PrintDirTree(m_prootnode,0);
+							}
 						}
 					}
 					else if(pevent->mask & IN_MOVED_TO)
@@ -500,6 +558,12 @@ void* FileMonitor::ImpWorkThread()
 						else
 						{
 							cout << "recv a file IN_MOVE_TO notify : "<< pevent->wd  <<" "<< pevent->name << endl;
+							NodeIter nodeiter = m_wd2node.find(pevent->wd);
+							if(nodeiter != m_wd2node.end())
+							{
+								Add_File(nodeiter->second,pevent->name);
+								PrintDirTree(m_prootnode,0);
+							}
 						}
 					}
 					else if(pevent->mask & IN_MOVE_SELF)
@@ -756,40 +820,46 @@ void* FileMonitor::ImpWorkThread()
 
 int FileMonitor::Delete_SubDir(FileNode* pparent,char* dirname)
 {
-	FileNode *psubnode = pparent->child_node,*plastsubnode = NULL;
-	while(psubnode != NULL)
+	FileNode *psub_node = pparent->child_node,*plastsubnode = NULL;
+	while(psub_node != NULL)
 	{
-		if(strcmp(psubnode->name,dirname) == 0)
+		if(strcmp(psub_node->name,dirname) == 0)
 				break;
-		plastsubnode = psubnode;
-		psubnode = psubnode->next_node;
+		plastsubnode = psub_node;
+		psub_node = psub_node->next_node;
 	}
-	if(psubnode != NULL)
+	if(psub_node != NULL)
 	{
 		if(plastsubnode == NULL)
-			pparent->child_node = psubnode->next_node;
+			pparent->child_node = psub_node->next_node;
 		else
-			plastsubnode->next_node = psubnode->next_node;
+			plastsubnode->next_node = psub_node->next_node;
 
-		Recursive_Delete_Node(psubnode);
+		if(psub_node->type == 1 && psub_node->parent_node != NULL)
+		{
+			cout << "delete file node "<< pparent->wd << " " <<  psub_node->name << endl;
+			delete psub_node;
+		}
+		else
+			Recursive_Delete_Node(psub_node);
 	}
 	return 0;
 }
 
 int FileMonitor::Recursive_Delete_Node(FileNode* pnode)
 {
-	FileNode* pchild_node = pnode->child_node,*ptempnode;
-	while(pchild_node != NULL)
+	FileNode* psub_node = pnode->child_node,*ptempnode;
+	while(psub_node != NULL)
 	{
-		ptempnode = pchild_node->next_node;
-		if(pchild_node->type == 0) //dir sub
-			Recursive_Delete_Node(pchild_node);
+		ptempnode = psub_node->next_node;
+		if(psub_node->type == 0) //dir sub
+			Recursive_Delete_Node(psub_node);
 		else //file sub
 		{
-			cout << "delete file node "<< pnode->wd << " " <<  pchild_node->name << endl;
-			delete pchild_node;
+			cout << "delete file node "<< pnode->wd << " " <<  psub_node->name << endl;
+			delete psub_node;
 		}
-		pchild_node = ptempnode;
+		psub_node = ptempnode;
 	}
 
 	cout << "delete node "<< pnode->wd << " " <<  pnode->name << endl;

@@ -29,6 +29,7 @@ struct FileNode
 	FileNode *parent_node;
 	FileNode *child_node;
 	FileNode *next_node;
+	int name_length;
 	char name[0]; //
 	FileNode()
 	{
@@ -51,6 +52,7 @@ public:
 private:
 	int SetupMonitor();
 	FileNode* AllocFileNode(char* pname);
+	int Add_File(FileNode* pparent,char* pfilename);
 	int Recursive_Add_Watch(char* path,FileNode* pparent);
 	int Delete_SubDir(FileNode* pparent,char* dirname);
 	int Recursive_Delete_Node(FileNode* pdir);
