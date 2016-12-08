@@ -30,11 +30,10 @@ int main(int argc, char* argv[]) {
 		exit(-1);
 	}
 
-	if((errno=filemonitor.StartMonitor()) < 0)
+	if((errno=filemonitor.Start_Monitor()) < 0)
 	{
 		cout<<"start monitor fail,errno="<<errno<<endl;
 		exit(-2);
-
 	}
 
 	pthread_mutex_lock(&g_exit_mutex);
@@ -43,7 +42,7 @@ int main(int argc, char* argv[]) {
 	pthread_cond_destroy(&g_exit_cond);
 	pthread_mutex_destroy(&g_exit_mutex);
 
-	filemonitor.StopMonitor();
+	filemonitor.Stop_Monitor();
 
 	exit(0);
 }

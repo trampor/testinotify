@@ -46,21 +46,23 @@ public:
 	virtual ~FileMonitor();
 	int GetErrNo();
 	int GetDestNum();
-	int StartMonitor();
-	int StopMonitor();
+	int Start_Monitor();
+	int Stop_Monitor();
 
 private:
-	int SetupMonitor();
+	int Setup_Monitor();
 	FileNode* AllocFileNode(char* pname);
 	int Add_File(FileNode* pparent,char* pfilename);
+	int Modify_File(FileNode* pparent,char* pfilename);
+	int Close_File(FileNode* pparent,char* pfilename);
 	int Recursive_Add_Watch(char* path,FileNode* pparent);
 	int Delete_SubDir(FileNode* pparent,char* dirname);
 	int Recursive_Delete_Node(FileNode* pdir);
 	static void* WorkThread(void* pthis);
 	void* ImpWorkThread();
-	int ClearData();
+	int Clear_Data();
 
-	int PrintDirTree(FileNode* pnode,int level);
+	int Print_DirTree(FileNode* pnode,int level);
 
 private:
 	int m_fd,m_epollfd,m_mask,m_subdir,m_filetype,m_destnum,m_errno;

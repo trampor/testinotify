@@ -68,7 +68,7 @@ FileMonitor::FileMonitor(char* ppath,int mask,int subdir)
 }
 
 FileMonitor::~FileMonitor() {
-	StopMonitor();
+	Stop_Monitor();
 }
 
 FileNode* FileMonitor::AllocFileNode(char* pname)
@@ -94,7 +94,7 @@ int FileMonitor::GetErrNo()
 	return m_errno;
 }
 
-int FileMonitor::StartMonitor()
+int FileMonitor::Start_Monitor()
 {
 	m_errno = 0;
 	if(m_bstarted)
@@ -111,7 +111,7 @@ int FileMonitor::StartMonitor()
 	return 0;
 }
 
-int FileMonitor::SetupMonitor()
+int FileMonitor::Setup_Monitor()
 {
 	if(lstat(m_path,&m_filestat) < 0)
 	{
@@ -170,7 +170,7 @@ int FileMonitor::SetupMonitor()
 	return 0;
 }
 
-int FileMonitor::StopMonitor()
+int FileMonitor::Stop_Monitor()
 {
 	if(m_bstarted )
 	{
@@ -180,7 +180,7 @@ int FileMonitor::StopMonitor()
 
 	if(m_wd2node.size() > 0)
 	{
-		ClearData();
+		Clear_Data();
 		cout << "FileMonitor clear data suc" << endl;
 	}
 
@@ -201,7 +201,7 @@ int FileMonitor::StopMonitor()
 	return 0;
 }
 
-int FileMonitor::ClearData()
+int FileMonitor::Clear_Data()
 {
 	if(m_prootnode != NULL)
 	{
@@ -298,8 +298,11 @@ int FileMonitor::Recursive_Add_Watch(char* path,FileNode* pparent)
 				node->child_node = pfilenode;
 			}
 
-			sprintf(m_temppathbuf,"%s/%s",subdirstr.c_str(),dent->d_name);
-			stat(m_path,&m_filestat);
+			if(subdirstr[subdirstr.size()-1] != '/')
+				sprintf(m_temppathbuf,"%s/%s",subdirstr.c_str(),dent->d_name);
+			else
+				sprintf(m_temppathbuf,"%s%s",subdirstr.c_str(),dent->d_name);
+			stat(m_temppathbuf,&m_filestat);
 			pfilenode->size = m_filestat.st_size;
 			pfilenode->st_mtim = m_filestat.st_mtim;
 			pfilenode->modifying = 0;
@@ -351,6 +354,63 @@ int FileMonitor::Add_File(FileNode* pparent,char* pfilename)
 	return 0;
 }
 
+int FileMonitor::Modify_File(FileNode* pparent,char* pfilename)
+{
+	FileNode* psub_node = pparent->child_node;
+	while(psub_node != NULL)
+	{
+		if(psub_node->type == 1)
+		{
+			if(strcmp(psub_node->name,pfilename) == 0)
+			{
+				psub_node->modifying = 1;
+				break;
+			}
+		}
+		psub_node = psub_node->next_node;
+	}
+
+	return 0;
+}
+
+int FileMonitor::Close_File(FileNode* pparent,char* pfilename)
+{
+	FileNode* psub_node = pparent->child_node;
+	while(psub_node != NULL)
+	{
+		if(psub_node->type == 1)
+		{
+			if(strcmp(psub_node->name,pfilename) == 0)
+			{
+				if(psub_node->modifying)
+				{
+					string subdirstr;
+					FileNode* ptempnode = pparent;
+					while(ptempnode != NULL)
+					{
+						subdirstr.insert(0,ptempnode->name);
+						ptempnode = ptempnode->parent_node;
+						if(ptempnode != NULL && strlen(ptempnode->name)>0 && ptempnode->name[strlen(ptempnode->name)-1] != '/')
+							subdirstr.insert(0,"/");
+					}
+					if(!subdirstr.empty() && subdirstr[subdirstr.size()-1] != '/')
+						subdirstr.append("/");
+					subdirstr.append(pfilename);
+
+					stat(subdirstr.c_str(),&m_filestat);
+					psub_node->size = m_filestat.st_size;
+					psub_node->st_mtim = m_filestat.st_mtim;
+					psub_node->modifying = 0;
+				}
+				break;
+			}
+		}
+		psub_node = psub_node->next_node;
+	}
+
+	return 0;
+}
+
 void* FileMonitor::WorkThread(void *pthis)
 {
 	FileMonitor* pmonitor = (FileMonitor*)pthis;
@@ -371,7 +431,7 @@ void* FileMonitor::ImpWorkThread()
 	{
 		if(m_prootnode == NULL) //启动监控失败，或者监控过程中目标被删除，重新建立
 		{
-			SetupMonitor();
+			Setup_Monitor();
 			if(m_prootnode == NULL)
 			{
 				usleep(10000);
@@ -409,7 +469,7 @@ void* FileMonitor::ImpWorkThread()
 							if(nodeiter != m_wd2node.end())
 							{
 								Recursive_Add_Watch(pevent->name,nodeiter->second);
-								PrintDirTree(m_prootnode,0);
+								Print_DirTree(m_prootnode,0);
 							}
 						}
 						else
@@ -419,7 +479,7 @@ void* FileMonitor::ImpWorkThread()
 							if(nodeiter != m_wd2node.end())
 							{
 								Add_File(nodeiter->second,pevent->name);
-								PrintDirTree(m_prootnode,0);
+								Print_DirTree(m_prootnode,0);
 							}
 						}
 					}
@@ -432,6 +492,11 @@ void* FileMonitor::ImpWorkThread()
 						else
 						{
 							cout << "recv a file IN_MODIFY notify : "<< pevent->wd  <<" "<< pevent->name << endl;
+							NodeIter nodeiter = m_wd2node.find(pevent->wd);
+							if(nodeiter != m_wd2node.end())
+							{
+								Modify_File(nodeiter->second,pevent->name);
+							}
 						}
 					}
 					else if(pevent->mask & IN_DELETE)
@@ -444,7 +509,7 @@ void* FileMonitor::ImpWorkThread()
 							if(nodeiter != m_wd2node.end())
 							{
 								Delete_SubDir(nodeiter->second,pevent->name);
-								PrintDirTree(m_prootnode,0);
+								Print_DirTree(m_prootnode,0);
 							}
 						}
 						else
@@ -455,7 +520,7 @@ void* FileMonitor::ImpWorkThread()
 							if(nodeiter != m_wd2node.end())
 							{
 								Delete_SubDir(nodeiter->second,pevent->name);
-								PrintDirTree(m_prootnode,0);
+								Print_DirTree(m_prootnode,0);
 							}
 						}
 					}
@@ -503,6 +568,12 @@ void* FileMonitor::ImpWorkThread()
 						else
 						{
 							cout << "recv a file IN_CLOSE notify : "<< pevent->wd  <<" "<< pevent->name << endl;
+
+							NodeIter nodeiter = m_wd2node.find(pevent->wd);
+							if(nodeiter != m_wd2node.end())
+							{
+								Close_File(nodeiter->second,pevent->name);
+							}
 						}
 					}
 					else if(pevent->mask & IN_OPEN)
@@ -527,7 +598,7 @@ void* FileMonitor::ImpWorkThread()
 							if(nodeiter != m_wd2node.end())
 							{
 								Delete_SubDir(nodeiter->second,pevent->name);
-								PrintDirTree(m_prootnode,0);
+								Print_DirTree(m_prootnode,0);
 							}
 						}
 						else
@@ -537,7 +608,7 @@ void* FileMonitor::ImpWorkThread()
 							if(nodeiter != m_wd2node.end())
 							{
 								Delete_SubDir(nodeiter->second,pevent->name);
-								PrintDirTree(m_prootnode,0);
+								Print_DirTree(m_prootnode,0);
 							}
 						}
 					}
@@ -552,7 +623,7 @@ void* FileMonitor::ImpWorkThread()
 							{
 								sprintf(subdirstr,"%s/%s",nodeiter->second->name,pevent->name);
 								Recursive_Add_Watch(subdirstr,nodeiter->second);
-								PrintDirTree(m_prootnode,0);
+								Print_DirTree(m_prootnode,0);
 							}
 						}
 						else
@@ -562,7 +633,7 @@ void* FileMonitor::ImpWorkThread()
 							if(nodeiter != m_wd2node.end())
 							{
 								Add_File(nodeiter->second,pevent->name);
-								PrintDirTree(m_prootnode,0);
+								Print_DirTree(m_prootnode,0);
 							}
 						}
 					}
@@ -590,7 +661,7 @@ void* FileMonitor::ImpWorkThread()
 							{
 								cout << "recv root dir IN_CREATE notify : "<< pevent->wd <<" " << nodeiter->second->name << endl;
 								Recursive_Add_Watch(nodeiter->second->name,nodeiter->second);
-								PrintDirTree(m_prootnode,0);
+								Print_DirTree(m_prootnode,0);
 							}
 						}
 						else
@@ -630,7 +701,7 @@ void* FileMonitor::ImpWorkThread()
 							{
 								cout << "recv root dir IN_DELETE notify : "<< pevent->wd  <<" "<< nodeiter->second->name << endl;
 								Delete_SubDir(nodeiter->second,pevent->name);
-								PrintDirTree(m_prootnode,0);
+								Print_DirTree(m_prootnode,0);
 							}
 						}
 						else
@@ -882,20 +953,22 @@ int FileMonitor::Recursive_Delete_Node(FileNode* pnode)
 	return 0;
 }
 
-int FileMonitor::PrintDirTree(FileNode* pnode,int level)
+int FileMonitor::Print_DirTree(FileNode* pnode,int level)
 {
 	if(pnode == NULL)
 		return -1;
 
 	for(int i=0;i<level;i++)
 		cout <<"---";
-	cout << ((pnode->type == 0)?"(Dir)":"(File)")<< pnode->name << endl;
-
+	if((pnode->type == 0))
+		cout << "(Dir)"<< pnode->name << endl;
+	else
+		cout << "(File" << pnode->size<<")"<< pnode->name << " time : "<< pnode->st_mtim.tv_sec << endl;
 
 	FileNode *ptempnode = pnode->child_node;
 	while(ptempnode != NULL)
 	{
-		PrintDirTree(ptempnode,level+1);
+		Print_DirTree(ptempnode,level+1);
 		ptempnode = ptempnode->next_node;
 	}
 
