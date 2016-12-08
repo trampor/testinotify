@@ -47,7 +47,7 @@ FileMonitor::FileMonitor(char* ppath,int mask,int subdir)
 
 	struct epoll_event inotify_epoll_event;
 	int option = EPOLL_CTL_ADD;
-	inotify_epoll_event.events = EPOLLIN | EPOLLET;
+	inotify_epoll_event.events = EPOLLIN ;
 	inotify_epoll_event.data.ptr = &m_fd;
 
 	int result = epoll_ctl(m_epollfd,option,m_fd,&inotify_epoll_event);
