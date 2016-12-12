@@ -86,6 +86,7 @@ FileNode* FileMonitor::AllocFileNode(char* pname)
 		ptempptr = new char[length];
 		memset(ptempptr,0,length);
 	}
+
 	return new(ptempptr) FileNode();
 }
 
