@@ -8,6 +8,7 @@
 
 #include <iostream>
 #include "FileMonitor.h"
+#include "MyRBTree.h"
 #include "SignalHandler.h"
 using namespace std;
 
@@ -19,6 +20,8 @@ int main(int argc, char* argv[]) {
 	{
 		cout << "usage testinotify path" << endl;
 	}
+
+	My_RBTree testrbtree;
 
 	SignalHandler handler;
 
