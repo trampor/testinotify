@@ -6,7 +6,7 @@ My_RBTree::My_RBTree():m_prootnode(NULL),m_nheight(-1),m_nnodes(0) {
 }
 
 My_RBTree::~My_RBTree() {
-	// TODO Auto-generated destructor stub
+	Destroy_Tree();
 }
 
 int My_RBTree::Insert_Node(My_RBTree_Node_Base* pnode)
@@ -33,6 +33,7 @@ int My_RBTree::Insert_Node(My_RBTree_Node_Base* pnode)
 		}
 	}
 	pnode->pparent = pparent;
+
 	if(pparent == NULL)
 		m_prootnode = pnode;
 	else if(blastleft)
@@ -43,22 +44,16 @@ int My_RBTree::Insert_Node(My_RBTree_Node_Base* pnode)
 	pnode->color = RBTREE_RED;
 
 	//调整位置和颜色
-	if(pnode == m_prootnode) //被插入节点是根，直接改根节点的颜色为黑色
-		pnode->color = RBTREE_BLACK;
-	else if(pnode->pparent->color == RBTREE_RED) //如父节点为红色，需要调整
-		Adjust_Node_After_Insert(pnode);
-	else//父节点为黑色，不需要做任何调整
-	{
-	}
+	Adjust_Node_After_Insert(pnode);
 
 	return 0;
 }
 
 int My_RBTree::Adjust_Node_After_Insert(My_RBTree_Node_Base* pnode)
 {
-	My_RBTree_Node_Base* pparent = pnode->pparent,*pgparent;
+	My_RBTree_Node_Base* pparent,*puncle,*pgparent,*ptemp;
 
-	while(pparent != NULL && pparent->color == RBTREE_RED) //父为红，那么至少要有一层祖父为黑，因为根必须为黑
+	while((pparent = pnode->pparent) != NULL && pparent->color == RBTREE_RED) //父为红，那么至少要有一层祖父为黑，因为根必须为黑
 	{
 		pgparent = pparent->pparent;
 
@@ -66,13 +61,109 @@ int My_RBTree::Adjust_Node_After_Insert(My_RBTree_Node_Base* pnode)
 		//每种情况要考虑，1 叔叔也是红色，2 叔叔为黑色，当前节点为右，3 叔叔为黑色，当前节点为左孩子
 		if(pparent == pgparent->plchild) //父为左
 		{
-
+			puncle = pgparent->prchild;
+			if(puncle != NULL && puncle->color == RBTREE_RED) //叔叔为红,同时把父亲和叔叔改黑，然后祖父改红，祖父变成当前，循环
+			{
+				pparent->color = RBTREE_BLACK;
+				puncle->color = RBTREE_BLACK;
+				pgparent->color = RBTREE_RED;
+				pnode = pgparent;
+			}
+			else //叔叔为黑
+			{
+				if(pnode == pparent->prchild) //当前节点为父的右子，转换为下面的左子情况进行处理
+				{
+					Left_Rotate(pparent);
+					ptemp = pnode;
+					pnode = pparent;
+					pparent = ptemp;
+				}
+				//当前节点为左子
+				pparent->color = RBTREE_BLACK;
+				pgparent->color = RBTREE_RED;
+				//以祖父为支点进行右旋
+				Right_Rotate(pgparent);
+			}
 		}
 		else //父为右
 		{
-
+			puncle = pgparent->plchild;
+			if(puncle != NULL && puncle->color == RBTREE_RED) //叔叔为红,同时把父亲和叔叔改黑，然后祖父改红，祖父变成当前，循环
+			{
+				pparent->color = RBTREE_BLACK;
+				puncle->color = RBTREE_BLACK;
+				pgparent->color = RBTREE_RED;
+				pnode = pgparent;
+			}
+			else //叔叔为黑
+			{
+				if(pnode == pparent->plchild) //当前节点为父的左子
+				{
+					Right_Rotate(pparent);
+					ptemp = pnode;
+					pnode = pparent;
+					pparent = ptemp;
+				}
+				//当前节点为父的右子
+				pparent->color = RBTREE_BLACK;
+				pgparent->color = RBTREE_RED;
+				Left_Rotate(pgparent);
+			}
 		}
 	}
+	m_prootnode->color = RBTREE_BLACK;
+
+	return 0;
+}
+
+int My_RBTree::Right_Rotate(My_RBTree_Node_Base* pnode)
+{
+	My_RBTree_Node_Base* plchild = pnode->plchild;
+
+	pnode->plchild = plchild->prchild;
+	if(plchild->prchild != NULL)
+		plchild->prchild->pparent = pnode;
+
+	plchild->pparent = pnode->pparent;
+
+	if(pnode->pparent != NULL)
+	{
+		if(pnode == pnode->pparent->plchild)
+			pnode->pparent->plchild = plchild;
+		else
+			pnode->pparent->prchild = plchild;
+	}
+	else
+		m_prootnode = plchild;
+
+	plchild->prchild = pnode;
+	pnode->pparent = plchild;
+
+	return 0;
+}
+int My_RBTree::Left_Rotate(My_RBTree_Node_Base* pnode)
+{
+	My_RBTree_Node_Base* prchild = pnode->prchild;
+
+	pnode->prchild = prchild->plchild;
+	if(prchild->plchild != NULL)
+		prchild->plchild->pparent = pnode;
+
+	prchild->pparent = pnode->pparent;
+
+	if(pnode->pparent != NULL)
+	{
+		if(pnode == pnode->pparent->plchild)
+			pnode->pparent->plchild = prchild;
+		else
+			pnode->pparent->prchild = prchild;
+	}
+	else
+		m_prootnode = prchild;
+
+	prchild->plchild =  pnode;
+
+	pnode->pparent = prchild;
 
 	return 0;
 }
@@ -81,7 +172,7 @@ int My_RBTree::Delete_Node(My_RBTree_Node_Base* pnode)
 {
 	bool blastleft;
 	int res;
-	My_RBTree_Node_Base *pcur = m_prootnode,*pparent = NULL,*pchildcur,*pchildp;
+	My_RBTree_Node_Base *pcur = m_prootnode,*pparent = NULL,*pchildcur=NULL,*pchildp=NULL;
 	while(pcur != NULL)
 	{
 		res = pcur->Compare(pnode);
@@ -102,95 +193,209 @@ int My_RBTree::Delete_Node(My_RBTree_Node_Base* pnode)
 	}
 	if(pcur == NULL) //未找到
 		return -1;
-	else //找到了
+	if(pcur->plchild != NULL && pcur->prchild != NULL) //有左子而且有右子
 	{
-		if(pcur->plchild == NULL && pcur->prchild == NULL) //无子，直接删除此node
+		//先找出被删节点的后续节点，就是下一个比当前被删节点大的节点，作为替换节点
+		pchildcur = pcur->prchild;
+		pchildp = pcur;
+		while(pchildcur->plchild!= NULL)
 		{
-			if(pparent == NULL)
-				m_prootnode = NULL;
-			else
-			{
-				if(blastleft)
-					pparent->plchild = NULL;
-				else
-					pparent->prchild = NULL;
-
-				if(pcur->color == RBTREE_BLACK) //如果被删节点颜色为黑色，那就改变了其父下面不同路径的黑色数量，需要调整
-				{
-
-				}
-			}
+			pchildp = pchildcur;
+			pchildcur = pchildcur->plchild;
 		}
-		else if(pcur->plchild != NULL) //有左子，将左子中最大的换到cur的位置
+
+		//找到后，用找到的节点替换被删节点在其父节点中的位置
+		if(pparent == NULL)
+			m_prootnode = pchildcur;
+		else
 		{
-			//先找出被删节点左子的最右子节点，作为替换节点
-			pchildcur = pcur->plchild;
-			pchildp = pcur;
-			while(pchildcur != NULL)
-			{
-				pchildp = pchildcur;
-				pchildcur = pchildcur->prchild;
-			}
-
-			//找到后，用找到的节点替换被删节点在其父节点中的位置
-			if(pparent == NULL)
-				m_prootnode = pchildp;
+			if(blastleft)
+				pparent->plchild = pchildcur;
 			else
-			{
-				if(blastleft)
-					pparent->plchild = pchildp;
-				else
-					pparent->prchild = pchildp;
-			}
-
-			//再处理替换节点的左子节点
-			if(pchildp->pparent == pcur) //替换节点的父节点为待删节点，不需处理
-			{
-
-			}
-			else //将替换节点的左子设置为替换节点的父节点的右子
-			{
-				pchildp->pparent->prchild = pchildp->plchild;
-				pchildp->plchild->pparent = pchildp->pparent;
-
-				pchildp->plchild = pcur->plchild;
-				if(pcur->plchild != NULL)
-					pcur->plchild->pparent = pchildp;
-			}
-
-			//调整替换节点的数据
-			pchildp->pparent = pparent;
-			pchildp->color = pcur->color;
-			pchildp->prchild = pcur->prchild;
-			if(pcur->prchild != NULL)
-				pcur->prchild->pparent = pchildp;
-
-			if(pcur->color == RBTREE_BLACK) //如果被删节点颜色为黑色，那就改变了其父下面不同路径的黑色数量，需要调整
-			{
-
-			}
+				pparent->prchild = pchildcur;
 		}
-		else //无左子，有右子，直接用右子替换到cur的位置
+
+		//替代节点没有左子，但可能有右子，需要调整右子的父,并将替换节点的右指向待删节点的右
+		if(pchildcur->pparent == pcur) //如果替换节点的父为待删节点，那么右子不需要调整
 		{
-			if(pparent == NULL)
-				m_prootnode = pcur->prchild;
-			else
-			{
-				if(blastleft)
-					pparent->plchild = pcur->prchild;
-				else
-					pparent->prchild = pcur->prchild;
-				pcur->prchild->pparent = pparent;
-
-			}
-
-			if(pcur->color == RBTREE_BLACK) //如果被删节点颜色为黑色，那就改变了其父下面不同路径的黑色数量，需要调整
-			{
-
-			}
+			pchildp = pchildcur;
 		}
-		delete pcur;
+		else
+		{
+			if(pchildcur->prchild != NULL)
+				pchildcur->prchild->pparent = pchildp;
+			pchildp->plchild = pchildcur->prchild;
+
+			pchildcur->prchild = pcur->prchild;
+			pcur->prchild->pparent = pchildcur;
+		}
+
+		//调整替换节点的数据
+		unsigned char color = pchildcur->color;
+		pchildcur->pparent = pparent;
+		pchildcur->color = pcur->color;
+		pchildcur->plchild = pcur->plchild;
+		pchildcur->plchild->pparent = pchildcur;
+
+		if(color == RBTREE_BLACK) //如果被删节点颜色为黑色，那就改变了其父下面不同路径的黑色数量，需要调整
+		{
+			Adjust_Node_After_Delete(pchildp->plchild,pchildp);
+		}
 	}
+	else //或者只有左子，或者只有右子，或者都没有
+	{
+		if(pnode->plchild != NULL)
+			pchildcur = pcur->plchild;
+		else if(pnode->prchild != NULL)
+			pchildcur = pcur->prchild;
+
+		if(pchildcur != NULL)
+		{
+			pchildcur->pparent = pparent;
+		}
+
+		if(pparent == NULL)
+		{
+			m_prootnode = pchildcur;
+		}
+		else
+		{
+			if(blastleft)
+				pparent->plchild = pchildcur;
+			else
+				pparent->prchild = pchildcur;
+		}
+
+		if(pcur->color == RBTREE_BLACK) //如果被删节点颜色为黑色，那就改变了其父下面不同路径的黑色数量，需要调整
+		{
+			Adjust_Node_After_Delete(pchildcur,pparent);
+		}
+	}
+	delete pcur;
+
+	return 0;
+}
+
+//函数的前提是pnode这一只黑少了1，需要调整
+int My_RBTree::Adjust_Node_After_Delete(My_RBTree_Node_Base* pnode,My_RBTree_Node_Base* pparent)
+{
+	My_RBTree_Node_Base* pother;
+
+	while((pnode == NULL || pnode->color == RBTREE_BLACK) && pnode != m_prootnode)
+	{
+		if(pnode == pparent->plchild)
+		{
+			pother = pparent->prchild;
+			if(pother->color == RBTREE_RED) //兄弟是红色的
+			{
+				pother->color = RBTREE_BLACK;
+				pparent->color = RBTREE_RED;
+				Left_Rotate(pparent);
+				pother = pparent->prchild;
+			}
+			if((!pother->plchild || pother->plchild->color == RBTREE_BLACK) && //兄弟的两个子都为黑色
+				(!pother->prchild || pother->prchild->color == RBTREE_BLACK))
+			{
+				pother->color = RBTREE_RED;
+				pnode = pparent;
+				pparent = pnode->pparent;
+			}
+			else
+			{
+				if(pother->prchild == NULL || pother->prchild->color == RBTREE_BLACK) //如果兄弟只有右子为黑，旋转成只有左子为黑
+				{
+					if(pother->plchild != NULL)
+						pother->plchild->color = RBTREE_BLACK;
+					pother->color = RBTREE_RED;
+					Right_Rotate(pother);
+					pother = pparent->prchild;
+				}
+				//兄弟只有左子为黑
+				pother->color = pparent->color;
+				pparent->color = RBTREE_BLACK;
+				if(pother->prchild != NULL)
+					pother->prchild->color = RBTREE_BLACK;
+				Left_Rotate(pparent);
+				break;
+			}
+		}
+		else
+		{
+			pother = pparent->plchild;
+			if(pother->color == RBTREE_RED)
+			{
+				pother->color = RBTREE_BLACK;
+				pparent->color = RBTREE_RED;
+				Right_Rotate(pparent);
+				pother = pparent->plchild;
+			}
+			if((pother->plchild==NULL || pother->plchild->color == RBTREE_BLACK ) &&
+			   (pother->prchild==NULL || pother->prchild->color == RBTREE_BLACK))
+			{
+				pother->color = RBTREE_RED;
+				pnode = pparent;
+				pparent = pnode->pparent;
+			}
+			else
+			{
+				if(pother->plchild == NULL || pother->plchild->color == RBTREE_BLACK)
+				{
+					pother->prchild->color = RBTREE_BLACK;
+					pother->color = RBTREE_RED;
+					Left_Rotate(pother);
+					pother = pparent->plchild;
+				}
+				pother->color = pparent->color;
+				pparent->color = RBTREE_BLACK;
+				pother->plchild->color = RBTREE_BLACK;
+				Right_Rotate(pparent);
+				break;
+			}
+		}
+	}
+
+	if(pnode != NULL)
+		 pnode->color = RBTREE_BLACK;
+	return 0;
+}
+
+int My_RBTree::Destroy_Tree()
+{
+	Destroy_Tree(m_prootnode);
+	m_prootnode = NULL;
+
+	return 0;
+}
+
+int My_RBTree::Destroy_Tree(My_RBTree_Node_Base* pnode)
+{
+	if(pnode == NULL)
+		return 0;
+	if(pnode->plchild != NULL)
+		Destroy_Tree(pnode->plchild);
+	if(pnode->prchild != NULL)
+		Destroy_Tree(pnode->prchild);
+	delete pnode;
+	return 0;
+}
+
+int My_RBTree::Print_Tree()
+{
+	return Print_Tree(m_prootnode,0,0);
+}
+
+int My_RBTree::Print_Tree(My_RBTree_Node_Base* pnode,int direction,int level)
+{
+	if(pnode == NULL)
+		return 0;
+
+	level++;
+	pnode->Print(direction,level);
+
+	if(pnode->plchild != NULL)
+		Print_Tree(pnode->plchild,-1,level);
+	if(pnode->prchild != NULL)
+		Print_Tree(pnode->prchild,1,level);
 
 	return 0;
 }

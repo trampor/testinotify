@@ -29,8 +29,9 @@ class My_RBTree_Node_Base
 {
 public:
 	My_RBTree_Node_Base():color(RBTREE_RED),pparent(NULL),plchild(NULL),prchild(NULL){}
-	virtual ~My_RBTree_Node_Base();
+	virtual ~My_RBTree_Node_Base(){};
 	virtual int Compare(My_RBTree_Node_Base* other) = 0;
+	virtual int Print(int direction,int level)=0;
 	unsigned char color;
 	My_RBTree_Node_Base *pparent,*plchild,*prchild;
 };
@@ -43,8 +44,16 @@ public:
 	int Insert_Node(My_RBTree_Node_Base* pnode);
 	int Delete_Node(My_RBTree_Node_Base* pnode);
 
+	int Print_Tree();
+	int Destroy_Tree();
+
 private:
 	int Adjust_Node_After_Insert(My_RBTree_Node_Base* pnode);
+	int Adjust_Node_After_Delete(My_RBTree_Node_Base* pchildnode,My_RBTree_Node_Base* pparentnode);
+	int Right_Rotate(My_RBTree_Node_Base* pnode);
+	int Left_Rotate(My_RBTree_Node_Base* pnode);
+	int Destroy_Tree(My_RBTree_Node_Base* pnode);
+	int Print_Tree(My_RBTree_Node_Base* pnode,int direction,int level);
 
 private:
 	My_RBTree_Node_Base* m_prootnode;

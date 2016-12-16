@@ -9,7 +9,9 @@
 #include <iostream>
 #include "FileMonitor.h"
 #include "MyRBTree.h"
+#include "IntRBTreeNode.h"
 #include "SignalHandler.h"
+#include "time.h"
 using namespace std;
 
 extern pthread_cond_t g_exit_cond;
@@ -21,7 +23,12 @@ int main(int argc, char* argv[]) {
 		cout << "usage testinotify path" << endl;
 	}
 
+	srand((int)time(0));
 	My_RBTree testrbtree;
+	for(int i=0;i<10;i++)
+		testrbtree.Insert_Node(new IntRBTreeNode(rand()%10000));
+	testrbtree.Print_Tree();
+	testrbtree.Destroy_Tree();
 
 	SignalHandler handler;
 

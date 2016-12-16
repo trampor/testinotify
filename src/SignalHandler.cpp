@@ -21,6 +21,7 @@ SignalHandler::SignalHandler() {
 	if(sigaction(SIGHUP,&act,NULL) < 0
 			|| sigaction(SIGINT,&act,NULL)
 			|| sigaction(SIGQUIT,&act,NULL)
+			|| sigaction(SIGSEGV,&act,NULL)
 			|| sigaction(SIGTERM,&act,NULL))
 	{
 		cout << "install signal process fail" << endl;
@@ -37,6 +38,8 @@ void SignalHandler::handle_signal(int n,struct siginfo* psiginfo,void *myact)
 		cout << "recv a SIGQUIT" << endl;
 	if(n == SIGTERM)
 		cout << "recv a SIGTERM" << endl;
+	if(n == SIGSEGV)
+		cout << "recv a SIGSEGV" << endl;
 
 	pthread_mutex_lock(&g_exit_mutex);
 	pthread_cond_signal(&g_exit_cond);
