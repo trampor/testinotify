@@ -172,7 +172,7 @@ int My_RBTree::Delete_Node(My_RBTree_Node_Base* pnode)
 {
 	bool blastleft;
 	int res;
-	My_RBTree_Node_Base *pcur = m_prootnode,*pparent = NULL,*pchildcur=NULL,*pchildp=NULL;
+	My_RBTree_Node_Base *pcur = m_prootnode,*pparent = NULL,*pchildcur=NULL,*pchildp=NULL,*pchildchild = NULL;
 	while(pcur != NULL)
 	{
 		res = pcur->Compare(pnode);
@@ -215,6 +215,7 @@ int My_RBTree::Delete_Node(My_RBTree_Node_Base* pnode)
 				pparent->prchild = pchildcur;
 		}
 
+		pchildchild = pchildcur->prchild;
 		//替代节点没有左子，但可能有右子，需要调整右子的父,并将替换节点的右指向待删节点的右
 		if(pchildcur->pparent == pcur) //如果替换节点的父为待删节点，那么右子不需要调整
 		{
@@ -239,14 +240,14 @@ int My_RBTree::Delete_Node(My_RBTree_Node_Base* pnode)
 
 		if(color == RBTREE_BLACK) //如果被删节点颜色为黑色，那就改变了其父下面不同路径的黑色数量，需要调整
 		{
-			Adjust_Node_After_Delete(pchildp->plchild,pchildp);
+			Adjust_Node_After_Delete(pchildchild,pchildp);
 		}
 	}
 	else //或者只有左子，或者只有右子，或者都没有
 	{
-		if(pnode->plchild != NULL)
+		if(pcur->plchild != NULL)
 			pchildcur = pcur->plchild;
-		else if(pnode->prchild != NULL)
+		else if(pcur->prchild != NULL)
 			pchildcur = pcur->prchild;
 
 		if(pchildcur != NULL)
@@ -272,6 +273,8 @@ int My_RBTree::Delete_Node(My_RBTree_Node_Base* pnode)
 		}
 	}
 	delete pcur;
+
+	Print_Tree();
 
 	return 0;
 }
