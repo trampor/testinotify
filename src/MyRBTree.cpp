@@ -1,6 +1,6 @@
 #include "MyRBTree.h"
 
-My_RBTree::My_RBTree():m_prootnode(NULL),m_nheight(-1),m_nnodes(0) {
+My_RBTree::My_RBTree():m_prootnode(NULL) {
 	// TODO Auto-generated constructor stub
 
 }

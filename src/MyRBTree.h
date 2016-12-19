@@ -57,8 +57,6 @@ private:
 
 private:
 	My_RBTree_Node_Base* m_prootnode;
-	int m_nheight;
-	int m_nnodes;
 };
 
 #endif /* MYRBTREE_H_ */

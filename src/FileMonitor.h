@@ -14,6 +14,7 @@
 #include <sys/inotify.h>
 #include <sys/stat.h>
 #include <map>
+#include "MyRBTree.h"
 using namespace std;
 
 #define EVENT_SIZE (sizeof(struct inotify_event))
