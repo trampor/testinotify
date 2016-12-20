@@ -23,24 +23,35 @@ int main(int argc, char* argv[]) {
 	{
 		cout << "usage testinotify path" << endl;
 	}
-
+/*
 	vector<int> valarray;
 	srand((int)time(0));
 	My_RBTree testrbtree;
-	for(int i=0;i<10;i++)
+clock_t start,end;
+start = clock();
+	for(int i=0;i<10000000;i++)
 	{
-		valarray.push_back(rand()%10000);
-		testrbtree.Insert_Node(new IntRBTreeNode(valarray[i]));
+//		valarray.push_back(rand()%100000000);
+		testrbtree.Insert_Node(new IntRBTreeNode(rand()%100000000));
 	}
-	testrbtree.Print_Tree();
+end = clock();
+cout << "use time " << (double)(end-start)/CLOCKS_PER_SEC << "s"<< endl;
+//	testrbtree.Print_Tree();
+
+	My_RBTree_Node_Base* pnode = testrbtree.Begin();
+	while(pnode != NULL)
+	{
+		pnode->Print();
+		pnode = testrbtree.Next();
+	}
 
 	for(auto a: valarray)
 	{
-		cout << "delete " << a << endl;
+//		cout << "delete " << a << endl;
 		testrbtree.Delete_Node(new IntRBTreeNode(a));
 	}
 	testrbtree.Destroy_Tree();
-
+*/
 	SignalHandler handler;
 
 	int errno;

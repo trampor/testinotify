@@ -71,23 +71,23 @@ FileMonitor::~FileMonitor() {
 	Stop_Monitor();
 }
 
-FileNode* FileMonitor::AllocFileNode(char* pname)
+FileRBTreeNode* FileMonitor::AllocFileNode(char* pname)
 {
 	char *ptempptr;
 	if(pname == NULL || strlen(pname) == 0)
 	{
-		int length = sizeof(FileNode) + 1;
+		int length = sizeof(FileRBTreeNode) + 1;
 		ptempptr = new char[length];
 		memset(ptempptr,0,length);
 	}
 	else
 	{
-		int length = sizeof(FileNode) + strlen(pname)+1;
+		int length = sizeof(FileRBTreeNode) + strlen(pname)+1;
 		ptempptr = new char[length];
 		memset(ptempptr,0,length);
 	}
 
-	return new(ptempptr) FileNode();
+	return new(ptempptr) FileRBTreeNode();
 }
 
 int FileMonitor::GetErrNo()
@@ -148,7 +148,7 @@ int FileMonitor::Setup_Monitor()
 		{
 			cout << "file inotify_add_watch suc : " << m_path << endl;
 
-			FileNode* node = AllocFileNode(m_path) ;
+			FileRBTreeNode* node = AllocFileNode(m_path) ;
 			node->wd = wd;
 			node->type = 1;
 			strcpy(&node->name[0],m_path);
@@ -219,12 +219,12 @@ int FileMonitor::GetDestNum()
 	return m_destnum;
 }
 
-int FileMonitor::Recursive_Add_Watch(char* path,FileNode* pparent)
+int FileMonitor::Recursive_Add_Watch(char* path,FileRBTreeNode* pparent)
 {
-	FileNode* node,*pfilenode;
+	FileRBTreeNode* node,*pfilenode;
 
 	string subdirstr;
-	FileNode* ptempnode = pparent;
+	FileRBTreeNode* ptempnode = pparent;
 	while(ptempnode != NULL)
 	{
 		subdirstr.insert(0,ptempnode->name);
@@ -257,13 +257,7 @@ int FileMonitor::Recursive_Add_Watch(char* path,FileNode* pparent)
 		else
 		{
 			node->parent_node = pparent;
-			if(pparent->child_node == NULL)
-				pparent->child_node = node;
-			else
-			{
-				node->next_node = pparent->child_node;
-				pparent->child_node = node;
-			}
+			pparent->m_childtree.Insert_Node(node);
 		}
 	}
 	m_destnum++;
@@ -289,15 +283,10 @@ int FileMonitor::Recursive_Add_Watch(char* path,FileNode* pparent)
 			pfilenode->wd = wd;
 			pfilenode->type = 1;
 			strcpy(&pfilenode->name[0],dent->d_name);
+cout << "add a new file " << pfilenode->name << endl;
 
 			pfilenode->parent_node = node;
-			if(node->child_node == NULL)
-				node->child_node = pfilenode;
-			else
-			{
-				pfilenode->next_node = node->child_node;
-				node->child_node = pfilenode;
-			}
+			node->m_childtree.Insert_Node(pfilenode);
 
 			if(subdirstr[subdirstr.size()-1] != '/')
 				sprintf(m_temppathbuf,"%s/%s",subdirstr.c_str(),dent->d_name);
@@ -315,10 +304,10 @@ int FileMonitor::Recursive_Add_Watch(char* path,FileNode* pparent)
 	return 0;
 }
 
-int FileMonitor::Add_File(FileNode* pparent,char* pfilename)
+int FileMonitor::Add_File(FileRBTreeNode* pparent,char* pfilename)
 {
 	string subdirstr;
-	FileNode* ptempnode = pparent;
+	FileRBTreeNode* ptempnode = pparent;
 	while(ptempnode != NULL)
 	{
 		subdirstr.insert(0,ptempnode->name);
@@ -333,19 +322,13 @@ int FileMonitor::Add_File(FileNode* pparent,char* pfilename)
 	stat(subdirstr.c_str(),&m_filestat);
 	if(S_ISREG(m_filestat.st_mode)) //file
 	{
-		FileNode* pfilenode = AllocFileNode(pfilename);
+		FileRBTreeNode* pfilenode = AllocFileNode(pfilename);
 		pfilenode->wd = pparent->wd;
 		pfilenode->type = 1;
 		strcpy(&pfilenode->name[0],pfilename);
 
 		pfilenode->parent_node = pparent;
-		if(pparent->child_node == NULL)
-			pparent->child_node = pfilenode;
-		else
-		{
-			pfilenode->next_node = pparent->child_node;
-			pparent->child_node = pfilenode;
-		}
+		pparent->m_childtree.Insert_Node(pfilenode);
 
 		pfilenode->size = m_filestat.st_size;
 		pfilenode->st_mtim = m_filestat.st_mtim;
@@ -355,58 +338,37 @@ int FileMonitor::Add_File(FileNode* pparent,char* pfilename)
 	return 0;
 }
 
-int FileMonitor::Modify_File(FileNode* pparent,char* pfilename)
+int FileMonitor::Modify_File(FileRBTreeNode* pparent,char* pfilename)
 {
-	FileNode* psub_node = pparent->child_node;
-	while(psub_node != NULL)
-	{
-		if(psub_node->type == 1)
-		{
-			if(strcmp(psub_node->name,pfilename) == 0)
-			{
-				psub_node->modifying = 1;
-				break;
-			}
-		}
-		psub_node = psub_node->next_node;
-	}
+	FileRBTreeNode* pchildnode = (FileRBTreeNode*)pparent->m_childtree.Find_Node(pfilename);
+	if(pchildnode != NULL)
+		pchildnode->modifying = 1;
 
 	return 0;
 }
 
-int FileMonitor::Close_File(FileNode* pparent,char* pfilename)
+int FileMonitor::Close_File(FileRBTreeNode* pparent,char* pfilename)
 {
-	FileNode* psub_node = pparent->child_node;
-	while(psub_node != NULL)
+	FileRBTreeNode* pchildnode = (FileRBTreeNode*)pparent->m_childtree.Find_Node(pfilename);
+	if(pchildnode != NULL && pchildnode->modifying)
 	{
-		if(psub_node->type == 1)
+		string subdirstr;
+		FileRBTreeNode* ptempnode = (FileRBTreeNode*)pchildnode->pparent;
+		while(ptempnode != NULL)
 		{
-			if(strcmp(psub_node->name,pfilename) == 0)
-			{
-				if(psub_node->modifying)
-				{
-					string subdirstr;
-					FileNode* ptempnode = pparent;
-					while(ptempnode != NULL)
-					{
-						subdirstr.insert(0,ptempnode->name);
-						ptempnode = ptempnode->parent_node;
-						if(ptempnode != NULL && strlen(ptempnode->name)>0 && ptempnode->name[strlen(ptempnode->name)-1] != '/')
-							subdirstr.insert(0,"/");
-					}
-					if(!subdirstr.empty() && subdirstr[subdirstr.size()-1] != '/')
-						subdirstr.append("/");
-					subdirstr.append(pfilename);
-
-					stat(subdirstr.c_str(),&m_filestat);
-					psub_node->size = m_filestat.st_size;
-					psub_node->st_mtim = m_filestat.st_mtim;
-					psub_node->modifying = 0;
-				}
-				break;
-			}
+			subdirstr.insert(0,ptempnode->name);
+			ptempnode = ptempnode->parent_node;
+			if(ptempnode != NULL && strlen(ptempnode->name)>0 && ptempnode->name[strlen(ptempnode->name)-1] != '/')
+				subdirstr.insert(0,"/");
 		}
-		psub_node = psub_node->next_node;
+		if(!subdirstr.empty() && subdirstr[subdirstr.size()-1] != '/')
+			subdirstr.append("/");
+		subdirstr.append(pfilename);
+
+		stat(subdirstr.c_str(),&m_filestat);
+		pchildnode->size = m_filestat.st_size;
+		pchildnode->st_mtim = m_filestat.st_mtim;
+		pchildnode->modifying = 0;
 	}
 
 	return 0;
@@ -890,48 +852,40 @@ void* FileMonitor::ImpWorkThread()
 	pthread_exit((void*)0);
 }
 
-int FileMonitor::Delete_SubDir(FileNode* pparent,char* dirname)
+int FileMonitor::Delete_SubDir(FileRBTreeNode* pparent,char* dirname)
 {
-	FileNode *psub_node = pparent->child_node,*plastsubnode = NULL;
-	while(psub_node != NULL)
+	FileRBTreeNode *pchildnode = (FileRBTreeNode*)pparent->m_childtree.Delete_Node(dirname);
+	if(pchildnode != NULL)
 	{
-		if(strcmp(psub_node->name,dirname) == 0)
-				break;
-		plastsubnode = psub_node;
-		psub_node = psub_node->next_node;
-	}
-	if(psub_node != NULL)
-	{
-		if(plastsubnode == NULL)
-			pparent->child_node = psub_node->next_node;
-		else
-			plastsubnode->next_node = psub_node->next_node;
 
-		if(psub_node->type == 1 && psub_node->parent_node != NULL)
+		if(pchildnode->type == 1 && pchildnode->parent_node != NULL)
 		{
-			cout << "delete file node "<< pparent->wd << " " <<  psub_node->name << endl;
-			delete psub_node;
+			cout << "delete file node "<< pparent->wd << " " <<  pchildnode->name << endl;
+			delete pchildnode;
 		}
 		else
-			Recursive_Delete_Node(psub_node);
+			Recursive_Delete_Node(pchildnode);
 	}
 	return 0;
 }
 
-int FileMonitor::Recursive_Delete_Node(FileNode* pnode)
+int FileMonitor::Recursive_Delete_Node(FileRBTreeNode* pnode)
 {
-	FileNode* psub_node = pnode->child_node,*ptempnode;
+	FileRBTreeNode* psub_node = (FileRBTreeNode*)pnode->m_childtree.Begin();
 	while(psub_node != NULL)
 	{
-		ptempnode = psub_node->next_node;
 		if(psub_node->type == 0) //dir sub
+		{
+			pnode->m_childtree.Delete_Node(psub_node->name);
 			Recursive_Delete_Node(psub_node);
+		}
 		else //file sub
 		{
 			cout << "delete file node "<< pnode->wd << " " <<  psub_node->name << endl;
+			pnode->m_childtree.Delete_Node(psub_node->name);
 			delete psub_node;
 		}
-		psub_node = ptempnode;
+		psub_node = (FileRBTreeNode*)pnode->m_childtree.Begin();
 	}
 
 	cout << "delete node "<< pnode->wd << " " <<  pnode->name << endl;
@@ -954,7 +908,7 @@ int FileMonitor::Recursive_Delete_Node(FileNode* pnode)
 	return 0;
 }
 
-int FileMonitor::Print_DirTree(FileNode* pnode,int level)
+int FileMonitor::Print_DirTree(FileRBTreeNode* pnode,int level)
 {
 	if(pnode == NULL)
 		return -1;
@@ -966,11 +920,11 @@ int FileMonitor::Print_DirTree(FileNode* pnode,int level)
 	else
 		cout << "(File" << pnode->size<<")"<< pnode->name << " time : "<< pnode->st_mtim.tv_sec << endl;
 
-	FileNode *ptempnode = pnode->child_node;
+	FileRBTreeNode *ptempnode = (FileRBTreeNode*)pnode->m_childtree.Begin();
 	while(ptempnode != NULL)
 	{
 		Print_DirTree(ptempnode,level+1);
-		ptempnode = ptempnode->next_node;
+		ptempnode = (FileRBTreeNode*)ptempnode->m_childtree.Next();
 	}
 
 	return 0;

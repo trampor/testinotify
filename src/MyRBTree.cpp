@@ -1,8 +1,8 @@
 #include "MyRBTree.h"
+#include <iostream>
+using namespace std;
 
-My_RBTree::My_RBTree():m_prootnode(NULL) {
-	// TODO Auto-generated constructor stub
-
+My_RBTree::My_RBTree():m_prootnode(NULL),m_pcurnode(NULL) {
 }
 
 My_RBTree::~My_RBTree() {
@@ -16,7 +16,7 @@ int My_RBTree::Insert_Node(My_RBTree_Node_Base* pnode)
 	My_RBTree_Node_Base *pcur = m_prootnode,*pparent = NULL;
 	while(pcur != NULL)
 	{
-		res = pcur->Compare(pnode);
+		res = pcur->Compare(pnode->GetValue());
 		if(res == 0)
 			return -1;
 		else if(res < 0)
@@ -168,14 +168,35 @@ int My_RBTree::Left_Rotate(My_RBTree_Node_Base* pnode)
 	return 0;
 }
 
-int My_RBTree::Delete_Node(My_RBTree_Node_Base* pnode)
+My_RBTree_Node_Base* My_RBTree::Find_Node(void* pvalue)
+{
+	int res;
+	My_RBTree_Node_Base *pcur = m_prootnode;
+	while(pcur != NULL)
+	{
+		res = pcur->Compare(pvalue);
+		if(res == 0)
+			break;
+		else if(res < 0)
+		{
+			pcur = pcur->prchild;
+		}
+		else
+		{
+			pcur = pcur->plchild;
+		}
+	}
+	return pcur;
+}
+
+My_RBTree_Node_Base* My_RBTree::Delete_Node(void* pvalue)
 {
 	bool blastleft;
 	int res;
 	My_RBTree_Node_Base *pcur = m_prootnode,*pparent = NULL,*pchildcur=NULL,*pchildp=NULL,*pchildchild = NULL;
 	while(pcur != NULL)
 	{
-		res = pcur->Compare(pnode);
+		res = pcur->Compare(pvalue);
 		if(res == 0)
 			break;
 		else if(res < 0)
@@ -192,7 +213,10 @@ int My_RBTree::Delete_Node(My_RBTree_Node_Base* pnode)
 		}
 	}
 	if(pcur == NULL) //未找到
-		return -1;
+	{
+		return NULL;
+	}
+
 	if(pcur->plchild != NULL && pcur->prchild != NULL) //有左子而且有右子
 	{
 		//先找出被删节点的后续节点，就是下一个比当前被删节点大的节点，作为替换节点
@@ -272,11 +296,7 @@ int My_RBTree::Delete_Node(My_RBTree_Node_Base* pnode)
 			Adjust_Node_After_Delete(pchildcur,pparent);
 		}
 	}
-	delete pcur;
-
-	Print_Tree();
-
-	return 0;
+	return pcur;
 }
 
 //函数的前提是pnode这一只黑少了1，需要调整
@@ -401,4 +421,51 @@ int My_RBTree::Print_Tree(My_RBTree_Node_Base* pnode,int direction,int level)
 		Print_Tree(pnode->prchild,1,level);
 
 	return 0;
+}
+
+My_RBTree_Node_Base* My_RBTree::Begin()
+{
+	m_pcurnode = m_prootnode;
+	if(m_pcurnode == NULL)
+		return m_pcurnode;
+
+	while(m_pcurnode->plchild != NULL)
+		m_pcurnode = m_pcurnode->plchild;
+
+	return m_pcurnode;
+}
+
+My_RBTree_Node_Base* My_RBTree::Next()
+{
+	if(m_pcurnode != NULL)
+	{
+		if(m_pcurnode->prchild != NULL) //当前节点有右子，找出右中最左的节点
+		{
+			m_pcurnode = m_pcurnode->prchild;
+			while(m_pcurnode->plchild != NULL)
+				m_pcurnode = m_pcurnode->plchild;
+		}
+		else //没有右子，循环向上查找，直到找到一个为左子的父
+		{
+			while(m_pcurnode != NULL)
+			{
+				if(m_pcurnode->pparent == NULL) //检查是否为根节点，如果是，下一个为空
+				{
+					m_pcurnode = NULL;
+					break;
+				}
+				else if(m_pcurnode == m_pcurnode->pparent->plchild) //有父，并且当前节点为父的左节点，父节点即为下一个节点
+				{
+					m_pcurnode = m_pcurnode->pparent;
+					break;
+				}
+				else
+				{
+					m_pcurnode = m_pcurnode->pparent;
+				}
+			}
+		}
+	}
+
+	return m_pcurnode;
 }

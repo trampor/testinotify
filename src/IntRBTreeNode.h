@@ -15,8 +15,10 @@ public:
 	IntRBTreeNode(int value);
 	virtual ~IntRBTreeNode();
 
-	int Compare(My_RBTree_Node_Base* other);
+	int Compare(void* pvalue);
+	void* GetValue();
 	int Print(int direction,int level);
+	int Print();
 private:
 	int m_nvalue;
 };

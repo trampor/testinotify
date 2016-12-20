@@ -15,11 +15,12 @@
 #include <sys/stat.h>
 #include <map>
 #include "MyRBTree.h"
+#include "FileRBTreeNode.h"
 using namespace std;
 
 #define EVENT_SIZE (sizeof(struct inotify_event))
 #define BUF_LEN (1024*(EVENT_SIZE+16))
-
+/*
 struct FileNode
 {
 	int wd;
@@ -40,7 +41,7 @@ struct FileNode
 		next_node = NULL;
 	}
 };
-
+*/
 class FileMonitor {
 public:
 	FileMonitor(char* ppath,int mask,int subdir);
@@ -52,18 +53,18 @@ public:
 
 private:
 	int Setup_Monitor();
-	FileNode* AllocFileNode(char* pname);
-	int Add_File(FileNode* pparent,char* pfilename);
-	int Modify_File(FileNode* pparent,char* pfilename);
-	int Close_File(FileNode* pparent,char* pfilename);
-	int Recursive_Add_Watch(char* path,FileNode* pparent);
-	int Delete_SubDir(FileNode* pparent,char* dirname);
-	int Recursive_Delete_Node(FileNode* pdir);
+	FileRBTreeNode* AllocFileNode(char* pname);
+	int Add_File(FileRBTreeNode* pparent,char* pfilename);
+	int Modify_File(FileRBTreeNode* pparent,char* pfilename);
+	int Close_File(FileRBTreeNode* pparent,char* pfilename);
+	int Recursive_Add_Watch(char* path,FileRBTreeNode* pparent);
+	int Delete_SubDir(FileRBTreeNode* pparent,char* dirname);
+	int Recursive_Delete_Node(FileRBTreeNode* pdir);
 	static void* WorkThread(void* pthis);
 	void* ImpWorkThread();
 	int Clear_Data();
 
-	int Print_DirTree(FileNode* pnode,int level);
+	int Print_DirTree(FileRBTreeNode* pnode,int level);
 
 private:
 	int m_fd,m_epollfd,m_mask,m_subdir,m_filetype,m_destnum,m_errno;
@@ -71,10 +72,10 @@ private:
 	char m_path[256],m_temppathbuf[256];
 
 	pthread_t m_threadid;
-	FileNode *m_prootnode;
+	FileRBTreeNode *m_prootnode;
 	struct stat m_filestat;
-	map<int,FileNode*> m_wd2node;
-	typedef map<int,FileNode*>::const_iterator NodeIter;
+	map<int,FileRBTreeNode*> m_wd2node;
+	typedef map<int,FileRBTreeNode*>::const_iterator NodeIter;
 };
 
 #endif /* FILEMONITOR_H_ */

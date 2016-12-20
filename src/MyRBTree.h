@@ -30,7 +30,9 @@ class My_RBTree_Node_Base
 public:
 	My_RBTree_Node_Base():color(RBTREE_RED),pparent(NULL),plchild(NULL),prchild(NULL){}
 	virtual ~My_RBTree_Node_Base(){};
-	virtual int Compare(My_RBTree_Node_Base* other) = 0;
+	virtual int Compare(void* pvalue) = 0;
+	virtual void* GetValue() = 0;
+	virtual int Print()=0;
 	virtual int Print(int direction,int level)=0;
 	unsigned char color;
 	My_RBTree_Node_Base *pparent,*plchild,*prchild;
@@ -42,10 +44,14 @@ public:
 	virtual ~My_RBTree();
 
 	int Insert_Node(My_RBTree_Node_Base* pnode);
-	int Delete_Node(My_RBTree_Node_Base* pnode);
+	My_RBTree_Node_Base* Find_Node(void* pvalue);
+	My_RBTree_Node_Base* Delete_Node(void* pvalue);
 
 	int Print_Tree();
 	int Destroy_Tree();
+
+	My_RBTree_Node_Base* Begin();
+	My_RBTree_Node_Base* Next();
 
 private:
 	int Adjust_Node_After_Insert(My_RBTree_Node_Base* pnode);
@@ -56,7 +62,7 @@ private:
 	int Print_Tree(My_RBTree_Node_Base* pnode,int direction,int level);
 
 private:
-	My_RBTree_Node_Base* m_prootnode;
+	My_RBTree_Node_Base* m_prootnode,*m_pcurnode;
 };
 
 #endif /* MYRBTREE_H_ */
