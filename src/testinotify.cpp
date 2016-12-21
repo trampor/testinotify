@@ -13,6 +13,7 @@
 #include "SignalHandler.h"
 #include "time.h"
 #include <vector>
+#include "MyRedisCli.h"
 using namespace std;
 
 extern pthread_cond_t g_exit_cond;
@@ -52,6 +53,11 @@ cout << "use time " << (double)(end-start)/CLOCKS_PER_SEC << "s"<< endl;
 	}
 	testrbtree.Destroy_Tree();
 */
+	MyRedisCli rediscli;
+	rediscli.InitConnection("127.0.0.1", 6379, 2);
+	rediscli.UninitConnection();
+
+
 	SignalHandler handler;
 
 	int errno;
