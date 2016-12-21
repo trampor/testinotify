@@ -8,7 +8,7 @@
 #include "FileRBTreeNode.h"
 #include "string.h"
 
-FileRBTreeNode::FileRBTreeNode() {
+FileRBTreeNode::FileRBTreeNode():wd(-1),type(0),size(0),name_length(0) {
 	modifying = false;
 	parent_node = NULL;
 }

@@ -20,28 +20,7 @@ using namespace std;
 
 #define EVENT_SIZE (sizeof(struct inotify_event))
 #define BUF_LEN (1024*(EVENT_SIZE+16))
-/*
-struct FileNode
-{
-	int wd;
-	int type; //0 dir;1 file;
-	off_t size;
-	int modifying;
-	struct timespec st_mtim;
-	FileNode *parent_node;
-	FileNode *child_node;
-	FileNode *next_node;
-	int name_length;
-	char name[0]; //
-	FileNode()
-	{
-		modifying = false;
-		parent_node = NULL;
-		child_node = NULL;
-		next_node = NULL;
-	}
-};
-*/
+
 class FileMonitor {
 public:
 	FileMonitor(char* ppath,int mask,int subdir);
