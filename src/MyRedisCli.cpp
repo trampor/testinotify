@@ -28,18 +28,66 @@ int MyRedisCli::InitConnection(char* psvrip,unsigned short svrport,int timeout)
 		return -1;
 
     redisReply *pRedisReply = (redisReply*)redisCommand(m_prediscontext, "INFO");  //执行INFO命令
-    if(pRedisReply != NULL)
+    if(pRedisReply == NULL || pRedisReply->type == REDIS_REPLY_ERROR) //error
+    {
+    	redisFree(m_prediscontext);
+    	return -2;
+    }
+    else if(pRedisReply->type == REDIS_REPLY_STRING)
     {
 		std::cout << pRedisReply->str << std::endl;
-		freeReplyObject(pRedisReply);
     }
+	freeReplyObject(pRedisReply);
 
     pRedisReply = (redisReply*)redisCommand(m_prediscontext, "Get a");  //执行get命令
-    if(pRedisReply != NULL)
+    if(pRedisReply == NULL || pRedisReply->type == REDIS_REPLY_ERROR) //error
+    {
+    	redisFree(m_prediscontext);
+    	return -2;
+    }
+    else if(pRedisReply->type == REDIS_REPLY_STRING)
     {
 		std::cout << pRedisReply->str << std::endl;
-		freeReplyObject(pRedisReply);
     }
+	freeReplyObject(pRedisReply);
+
+    pRedisReply = (redisReply*)redisCommand(m_prediscontext, "set a2 234567890");  //执行get命令
+    if(pRedisReply == NULL || pRedisReply->type == REDIS_REPLY_ERROR) //error
+    {
+    	redisFree(m_prediscontext);
+    	return -2;
+    }
+    else if(pRedisReply->type == REDIS_REPLY_STATUS)
+    {
+		std::cout << pRedisReply->str << std::endl;
+    }
+	freeReplyObject(pRedisReply);
+
+    pRedisReply = (redisReply*)redisCommand(m_prediscontext, "strlen a2");  //执行get命令
+    if(pRedisReply == NULL || pRedisReply->type == REDIS_REPLY_ERROR) //error
+    {
+    	redisFree(m_prediscontext);
+    	return -2;
+    }
+    else if(pRedisReply->type == REDIS_REPLY_INTEGER)
+    {
+		std::cout << pRedisReply->integer << std::endl;
+    }
+	freeReplyObject(pRedisReply);
+
+    pRedisReply = (redisReply*)redisCommand(m_prediscontext, "mget a a2");  //执行get命令
+    if(pRedisReply == NULL || pRedisReply->type == REDIS_REPLY_ERROR) //error
+    {
+    	redisFree(m_prediscontext);
+    	return -2;
+    }
+    else if(pRedisReply->type == REDIS_REPLY_ARRAY)
+    {
+    	cout << "reply an array:" << endl;
+    	for(unsigned int i=0;i<pRedisReply->elements;i++)
+    		std::cout << pRedisReply->element[i]->str << std::endl;
+    }
+	freeReplyObject(pRedisReply);
 
 	return 0;
 }
