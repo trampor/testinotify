@@ -21,6 +21,7 @@ SignalHandler::SignalHandler() {
 	if(sigaction(SIGHUP,&act,NULL) < 0
 			|| sigaction(SIGINT,&act,NULL)
 			|| sigaction(SIGQUIT,&act,NULL)
+			|| sigaction(SIGUSR1,&act,NULL)
 			|| sigaction(SIGSEGV,&act,NULL)
 			|| sigaction(SIGTERM,&act,NULL))
 	{
@@ -34,11 +35,13 @@ void SignalHandler::handle_signal(int n,struct siginfo* psiginfo,void *myact)
 		cout << "recv a SIGHUP" << endl;
 	else if(n == SIGINT)
 		cout << "recv a SIGINT" << endl;
-	if(n == SIGQUIT)
+	else if(n == SIGUSR1)
+		cout << "recv a SIGUSR1" << endl;
+	else if(n == SIGQUIT)
 		cout << "recv a SIGQUIT" << endl;
-	if(n == SIGTERM)
+	else if(n == SIGTERM)
 		cout << "recv a SIGTERM" << endl;
-	if(n == SIGSEGV)
+	else if(n == SIGSEGV)
 		cout << "recv a SIGSEGV" << endl;
 
 	pthread_mutex_lock(&g_exit_mutex);
