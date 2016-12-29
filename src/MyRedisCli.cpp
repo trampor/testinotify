@@ -20,7 +20,7 @@ MyRedisCli::~MyRedisCli() {
 	// TODO Auto-generated destructor stub
 }
 
-int MyRedisCli::InitConnection(char* psvrip,unsigned short svrport,int timeout)
+int MyRedisCli::InitConnect(char* psvrip,unsigned short svrport,int timeout)
 {
 	struct timeval timeout0 = {timeout, 0};
 	m_prediscontext = (redisContext*)redisConnectWithTimeout(psvrip, svrport, timeout0);
@@ -375,7 +375,7 @@ int MyRedisCli::InitConnection(char* psvrip,unsigned short svrport,int timeout)
 	return 0;
 }
 
-int MyRedisCli::UninitConnection()
+int MyRedisCli::DisConnect()
 {
 	if(m_prediscontext != NULL)
 	{

@@ -16,6 +16,7 @@
 #include "MyRedisCli.h"
 #include "MyRedisPublisher.h"
 #include "MyRedisSubscriber.h"
+#include "MysqlCli.h"
 using namespace std;
 
 extern pthread_cond_t g_exit_cond;
@@ -72,7 +73,7 @@ cout << "use time " << (double)(end-start)/CLOCKS_PER_SEC << "s"<< endl;
 	pub.UninitConnection();
 */
 	MyRedisSubscriber sub;
-	sub.InitConnection("127.0.0.1", 6379);
+	sub.InitConnect("127.0.0.1", 6379);
 	sub.Subscribe("testchannel");
 
 	SignalHandler handler;

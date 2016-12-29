@@ -15,7 +15,7 @@ MyRedisPublisher::MyRedisPublisher() :m_pevent_base(0),m_event_thread(0),m_predi
 MyRedisPublisher::~MyRedisPublisher() {
 }
 
-int MyRedisPublisher::InitConnection(char* psvrip,unsigned short svrport)
+int MyRedisPublisher::InitConnect(char* psvrip,unsigned short svrport)
 {
 	m_predisasynccontext = redisAsyncConnect(psvrip,svrport);
 	if(NULL == m_predisasynccontext || m_predisasynccontext->err)
@@ -28,7 +28,7 @@ int MyRedisPublisher::InitConnection(char* psvrip,unsigned short svrport)
 	if(NULL == m_pevent_base)
 	{
 		cout << "create libevent obj fail. "<<endl;
-		UninitConnection();
+		DisConnect();
 		return -2;
 	}
 
@@ -37,7 +37,7 @@ int MyRedisPublisher::InitConnection(char* psvrip,unsigned short svrport)
 	if(0 != ret)
 	{
 		cout << "init sem obj fail. "<<endl;
-		UninitConnection();
+		DisConnect();
 		return -3;
 	}
 
@@ -48,7 +48,7 @@ int MyRedisPublisher::InitConnection(char* psvrip,unsigned short svrport)
 	ret = pthread_create(&m_event_thread,0,&MyRedisPublisher::event_thread,this);
 	if(0 != ret)
 	{
-		UninitConnection();
+		DisConnect();
 	}
 
 	//设置连接回调
@@ -63,7 +63,7 @@ int MyRedisPublisher::InitConnection(char* psvrip,unsigned short svrport)
 	return 0;
 }
 
-int MyRedisPublisher::UninitConnection()
+int MyRedisPublisher::DisConnect()
 {
 	if(NULL != m_predisasynccontext)
 	{

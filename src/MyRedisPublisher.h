@@ -24,8 +24,8 @@ public:
 	MyRedisPublisher();
 	virtual ~MyRedisPublisher();
 
-	int InitConnection(char* psvrip,unsigned short svrport=6379);
-	int UninitConnection();
+	int InitConnect(char* psvrip,unsigned short svrport=6379);
+	int DisConnect();
 
 	int Publish(char* channel_name, char* message );
 

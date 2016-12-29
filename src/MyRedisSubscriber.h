@@ -23,8 +23,8 @@ public:
 	MyRedisSubscriber();
 	virtual ~MyRedisSubscriber();
 
-	int InitConnection(char* psvrip,unsigned short svrport=6379);
-	int UninitConnection();
+	int InitConnect(char* psvrip,unsigned short svrport=6379);
+	int DisConnect();
 
 	int Subscribe(char* channel_name );
 private:
