@@ -14,6 +14,8 @@
 #include "time.h"
 #include <vector>
 #include "MyRedisCli.h"
+#include "MyRedisPublisher.h"
+#include "MyRedisSubscriber.h"
 using namespace std;
 
 extern pthread_cond_t g_exit_cond;
@@ -52,11 +54,26 @@ cout << "use time " << (double)(end-start)/CLOCKS_PER_SEC << "s"<< endl;
 		testrbtree.Delete_Node(new IntRBTreeNode(a));
 	}
 	testrbtree.Destroy_Tree();
-*/
+
 	MyRedisCli rediscli;
 	rediscli.InitConnection("127.0.0.1", 6379, 2);
 	rediscli.UninitConnection();
 
+
+	MyRedisPublisher pub;
+	char c;
+	string tempstr;
+	pub.InitConnection("127.0.0.1", 6379);
+	while(cin.get(c))
+	{
+		tempstr.push_back(c);
+		pub.Publish((char*)"testchannel", (char*)tempstr.c_str());
+	}
+	pub.UninitConnection();
+*/
+	MyRedisSubscriber sub;
+	sub.InitConnection("127.0.0.1", 6379);
+	sub.Subscribe("testchannel");
 
 	SignalHandler handler;
 

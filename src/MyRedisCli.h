@@ -15,7 +15,7 @@ public:
 	MyRedisCli();
 	virtual ~MyRedisCli();
 
-	int InitConnection(char* psvrip,unsigned short svrport,int timeout);
+	int InitConnection(char* psvrip,unsigned short svrport=6379,int timeout=2);
 	int UninitConnection();
 
 private:

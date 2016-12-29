@@ -35,6 +35,7 @@
 							<tool id="cdt.managedbuild.tool.gnu.cpp.linker.exe.debug.625378401" name="GCC C++ Linker" superClass="cdt.managedbuild.tool.gnu.cpp.linker.exe.debug">
 								<option id="gnu.cpp.link.option.libs.255824785" name="Libraries (-l)" superClass="gnu.cpp.link.option.libs" useByScannerDiscovery="false" valueType="libs">
 									<listOptionValue builtIn="false" value="pthread"/>
+									<listOptionValue builtIn="false" value="event"/>
 									<listOptionValue builtIn="false" value="hiredis"/>
 								</option>
 								<inputType id="cdt.managedbuild.tool.gnu.cpp.linker.input.159814540" superClass="cdt.managedbuild.tool.gnu.cpp.linker.input">
