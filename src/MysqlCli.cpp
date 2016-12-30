@@ -10,13 +10,11 @@
 #include <string.h>
 using namespace std;
 
-MysqlCli::MysqlCli() {
-	// TODO Auto-generated constructor stub
+MysqlCli::MysqlCli() :procresult(NULL),row(NULL){
 
 }
 
 MysqlCli::~MysqlCli() {
-	// TODO Auto-generated destructor stub
 }
 
 int MysqlCli::InitConnect(char* host,char* user,char* psw,char* server)
